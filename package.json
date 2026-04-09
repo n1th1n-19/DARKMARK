@@ -6,6 +6,10 @@
   "engines": {
     "vscode": "^1.74.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/n1th1n/darkmark"
+  },
   "categories": [
     "Other"
   ],
@@ -39,6 +43,7 @@
     "@types/markdown-it": "^14.0.0",
     "@types/node": "^25.5.2",
     "@types/vscode": "^1.74.0",
+    "@vscode/vsce": "^3.7.1",
     "typescript": "^5.0.0"
   },
   "dependencies": {
