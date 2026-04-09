@@ -1,0 +1,47 @@
+{
+  "name": "darkmark",
+  "displayName": "darkmark",
+  "description": "Renders .md files as a dark-themed HTML preview in VS Code",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "darkmark.preview",
+        "displayName": "darkmark",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "darkmark.openAsText",
+        "title": "darkmark: Edit Source"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.0.0",
+    "@types/node": "^25.5.2",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "markdown-it": "^14.0.0"
+  }
+}
