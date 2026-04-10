@@ -1,5 +1,7 @@
 # darkmark
 
+![darkmark logo](media/logo.png)
+
 A VS Code extension that opens `.md` files as a rendered dark-themed preview instead of raw text.
 
 ## Features

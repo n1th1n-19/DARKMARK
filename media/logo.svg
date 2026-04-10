@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#bc8cff"/>
+      <stop offset="100%" stop-color="#58a6ff"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer background -->
+  <rect width="200" height="200" rx="28" fill="#0d1117" stroke="#30363d" stroke-width="1.5"/>
+
+  <!-- Bookmark shape -->
+  <path d="M58 30 H142 V165 L100 140 L58 165 Z"
+        fill="#161b22"
+        stroke="#30363d"
+        stroke-width="1.5"
+        stroke-linejoin="round"/>
+
+  <!-- # symbol — horizontal bars -->
+  <g filter="url(#glow)">
+    <line x1="74" y1="83" x2="126" y2="83"
+          stroke="url(#accent-grad)" stroke-width="5.5" stroke-linecap="round"/>
+    <line x1="74" y1="102" x2="126" y2="102"
+          stroke="url(#accent-grad)" stroke-width="5.5" stroke-linecap="round"/>
+
+    <!-- # symbol — vertical bars (slightly angled, as in a real #) -->
+    <line x1="89"  y1="69" x2="83"  y2="116"
+          stroke="url(#accent-grad)" stroke-width="5.5" stroke-linecap="round"/>
+    <line x1="113" y1="69" x2="107" y2="116"
+          stroke="url(#accent-grad)" stroke-width="5.5" stroke-linecap="round"/>
+  </g>
+</svg>

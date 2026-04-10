@@ -1,3 +1,25 @@
+# 2026-04-10 — Integrate logo across extension and README
+
+## Changes
+
+- `package.json` — Added `"icon": "media/logo.png"` so the logo appears in the VS Code extensions panel
+- `src/markdownEngine.ts` — Added logo as webview favicon (`<link rel="icon">`) so it shows in the preview tab
+- `README.md` — Added logo image at the top of the file
+
+## New Files
+
+- `media/logo.png` — PNG export of the SVG logo (required by vsce for the extension icon field)
+
+---
+
+# 2026-04-10 — Add project logo SVG
+
+## New Files
+
+- `media/logo.svg` — Project logo: dark rounded background, bookmark shape, glowing `#` symbol in purple-to-blue gradient; uses design tokens from `preview.css`
+
+---
+
 # 2026-04-09 16:00 — Initial build of darkmark VS Code extension
 
 ## New Files

@@ -39,12 +39,16 @@ export function renderMarkdown(
   const jsUri = webview.asWebviewUri(
     vscode.Uri.joinPath(context.extensionUri, 'media', 'preview.js')
   );
+  const logoUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(context.extensionUri, 'media', 'logo.svg')
+  );
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="${logoUri}" />
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none';
              style-src ${webview.cspSource} https://fonts.googleapis.com 'unsafe-inline';
