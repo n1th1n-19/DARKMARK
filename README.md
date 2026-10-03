@@ -7,13 +7,22 @@ A VS Code extension that opens `.md` files as a rendered dark-themed preview ins
 ## Features
 
 - Auto-renders all `.md` files in a dark-themed webview
+- **Images, video and audio**: relative paths (`![](./shot.png)`, `<img>`, `<video>`) resolve next to the `.md` file. `![](clip.webm)` / `![](song.mp3)` render as players. YouTube `<iframe>` embeds work
+- **Math**: `$inline$`, `$$block$$` and ` ```math ` via KaTeX
+- **Mermaid diagrams** in ` ```mermaid ` blocks
+- **Task lists**: `- [ ]` / `- [x]` render as checkboxes
+- **Heading anchors + Contents panel**: jump to any h1–h3. `#anchor` links scroll
+- **Working links**: other `.md` files open in darkmark, other files in VS Code, web links in your browser
+- **Copy button** on every code block
 - Syntax highlighting for code blocks (atom-one-dark theme)
-- Live preview updates as you edit the source
+- Live preview while you edit the source, or when the file changes on disk
 - "Edit Source" button to switch back to raw text at any time
+
+> **Video formats:** VS Code ships without proprietary codecs, so H.264 `.mp4` files may not play. Use `.webm` for reliable playback.
 
 ## Installation
 
-1. Download the `.vsix` file from the [releases page](https://github.com/n1th1n/darkmark/releases)
+1. Download the `.vsix` file from the [releases page](https://github.com/n1th1n-19/DARKMARK/releases)
 2. Open VS Code → Extensions panel → `···` menu → **Install from VSIX**
 3. Select the downloaded `.vsix` file
 
@@ -27,14 +36,25 @@ To edit the raw markdown, click the **Edit Source** button in the bottom-right c
 
 ```bash
 npm install
-npm run compile
-vsce package
+npm run package
 ```
+
+## Releases
+
+Every PR merged into `main` is released automatically (`.github/workflows/release.yml`):
+
+- Version bump comes from PR labels: `major`, `minor`, otherwise patch.
+- If the PR already bumped `package.json` to a version that hasn't been released yet, that version is released as-is.
+- The workflow commits the bump to `main`, tags `vX.Y.Z`, and attaches the `.vsix` to a GitHub Release.
+
+If you protect `main`, let `github-actions[bot]` push to it, or the bump commit will fail.
 
 ## Tech Stack
 
 - [markdown-it](https://github.com/markdown-it/markdown-it) — markdown parsing
 - [highlight.js](https://highlightjs.org/) — syntax highlighting
+- [KaTeX](https://katex.org/) via [@vscode/markdown-it-katex](https://github.com/microsoft/vscode-markdown-it-katex) — math
+- [Mermaid](https://mermaid.js.org/) — diagrams
 - VS Code `CustomReadonlyEditorProvider` API
 
 ## License

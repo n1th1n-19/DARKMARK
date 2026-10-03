@@ -1,14 +1,14 @@
 {
   "name": "darkmark",
   "displayName": "darkmark",
-  "description": "Renders .md files as a dark-themed HTML preview in VS Code",
-  "version": "1.0.0",
+  "description": "Renders .md files as a dark-themed preview in VS Code, with images, video, math, Mermaid and more",
+  "version": "2.0.0",
   "engines": {
     "vscode": "^1.74.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/n1th1n/darkmark"
+    "url": "https://github.com/n1th1n-19/DARKMARK"
   },
   "icon": "media/logo.png",
   "categories": [
@@ -37,8 +37,10 @@
     ]
   },
   "scripts": {
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.0.0",
@@ -48,6 +50,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@vscode/markdown-it-katex": "^1.1.2",
     "markdown-it": "^14.0.0"
   }
 }
