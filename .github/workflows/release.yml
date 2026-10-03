@@ -4,8 +4,10 @@ name: Release
 # tag, build the .vsix and publish a GitHub Release.
 # Bump size comes from PR labels: `major`, `minor`, otherwise patch.
 
+# pull_request_target so merged fork PRs get a write token. Safe here: the job only
+# runs for merged PRs and only checks out the merge commit already on main.
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
     branches: [main]
 
@@ -15,6 +17,7 @@ permissions:
 concurrency:
   group: release
   cancel-in-progress: false
+  queue: max
 
 jobs:
   release:
@@ -23,8 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -41,7 +45,9 @@ jobs:
           CUR=$(node -p "require('./package.json').version")
           # Version not released yet -> the PR bumped it by hand; ship it as-is
           if git rev-parse -q --verify "refs/tags/v$CUR" >/dev/null; then
-            npm version "$BUMP" --no-git-tag-version
+            # Bump from the newest tag: a queued run's merge commit may predate earlier releases
+            LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+            npm version "$(node -p "require('semver').inc('${LATEST#v}', process.env.BUMP)")" --no-git-tag-version
           fi
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
@@ -50,13 +56,14 @@ jobs:
 
       - name: Commit and tag
         env:
+          GH_TOKEN: ${{ github.token }}
           V: ${{ steps.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           if ! git diff --quiet package.json package-lock.json; then
             git commit -m "chore(release): v$V [skip ci]" package.json package-lock.json
-            git push origin main
           fi
           git tag "v$V"
           git push origin "v$V"
@@ -66,3 +73,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.version.outputs.version }}
         run: gh release create "v$V" "darkmark-$V.vsix" --title "v$V" --generate-notes
+
+      # Last, so a conflict here never blocks the release. main may have moved past
+      # this merge; the bump commit only touches version fields, so rebase onto it.
+      - name: Push version bump to main
+        run: |
+          if [ "$(git rev-parse HEAD)" != "${{ github.event.pull_request.merge_commit_sha }}" ]; then
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main
+          fi

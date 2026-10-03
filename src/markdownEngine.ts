@@ -20,7 +20,7 @@ const md = new MarkdownIt({
 
 // GitHub-style heading ids so #anchor links and the TOC work
 md.core.ruler.push('heading_ids', (state) => {
-  const seen = new Map<string, number>();
+  const used = new Set<string>();
   state.tokens.forEach((token, i) => {
     if (token.type !== 'heading_open') return;
     const base = state.tokens[i + 1].content
@@ -28,9 +28,11 @@ md.core.ruler.push('heading_ids', (state) => {
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s_-]/gu, '')
       .replace(/\s/g, '-');
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    token.attrSet('id', n ? `${base}-${n}` : base);
+    // Advance the suffix until unused: "Links", "Links", "Links 1" -> links, links-1, links-1-1
+    let id = base;
+    for (let n = 1; used.has(id); n++) id = `${base}-${n}`;
+    used.add(id);
+    token.attrSet('id', id);
   });
 });
 

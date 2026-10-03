@@ -35,11 +35,15 @@ export class MarkdownEditorProvider implements vscode.CustomReadonlyEditorProvid
 
     const readFile = async () =>
       Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-    const update = (text: string) =>
+    // Counts posted updates so a slow disk read can't overwrite newer content
+    let updates = 0;
+    const update = (text: string) => {
+      updates++;
       webview.postMessage({
         command: 'update',
         html: renderMarkdown(text, webview, this.context, docDir, true),
       });
+    };
 
     webview.html = renderMarkdown(await readFile(), webview, this.context, docDir);
 
@@ -80,7 +84,15 @@ export class MarkdownEditorProvider implements vscode.CustomReadonlyEditorProvid
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(docDir, path.posix.basename(uri.path))
     );
-    watcher.onDidChange(async () => update(await readFile()));
+    watcher.onDidChange(async () => {
+      // Unsaved edits in a text editor win over the file on disk
+      if (vscode.workspace.textDocuments.some((d) => d.uri.toString() === key && d.isDirty)) {
+        return;
+      }
+      const before = updates;
+      const text = await readFile();
+      if (updates === before) update(text);
+    });
 
     webviewPanel.onDidDispose(() => {
       changeListener.dispose();

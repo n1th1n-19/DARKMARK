@@ -3,10 +3,16 @@
   const vscode = acquireVsCodeApi();
   const content = /** @type {HTMLElement} */ (document.getElementById('preview-content'));
 
-  mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' });
+  // CDN scripts may fail to load (offline): preview controls must still work
+  const hasHljs = typeof hljs !== 'undefined';
+  const hasMermaid = typeof mermaid !== 'undefined';
+  if (hasMermaid) {
+    mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' });
+  }
 
   /** Run highlight.js on all code blocks in the document */
   function highlightAll() {
+    if (!hasHljs) return;
     content.querySelectorAll('pre.code-block code').forEach((block) => {
       hljs.highlightElement(/** @type {HTMLElement} */ (block));
     });
@@ -48,7 +54,7 @@
     addCopyButtons();
     buildToc();
     // Invalid diagrams (e.g. mid-typing) render mermaid's own error box
-    mermaid.run({ nodes: content.querySelectorAll('pre.mermaid') }).catch(() => {});
+    if (hasMermaid) mermaid.run({ nodes: content.querySelectorAll('pre.mermaid') }).catch(() => {});
   }
 
   // Inject the "Edit Source" and "Contents" buttons
