@@ -1,5 +1,31 @@
 # Release Notes
 
+## v2.0.0 — 2026-10-03
+
+### Highlights
+
+- **Media in previews.** Local images, videos and audio referenced from the markdown now display. Relative paths resolve against the `.md` file's folder, including files outside the workspace. `![](clip.webm)` and `![](song.mp3)` render as players, and raw `<img>`, `<video>`, `<audio>` and YouTube `<iframe>` tags work.
+- **Math** with KaTeX: `$…$`, `$$…$$` and ` ```math ` blocks. Rendered by the extension, so it works offline.
+- **Mermaid diagrams** in ` ```mermaid ` blocks, dark themed.
+- **Task lists**: `- [ ]` / `- [x]` render as checkboxes.
+- **Heading anchors + Contents panel**: GitHub-style heading ids, a "Contents" button to jump between h1–h3, and `#anchor` links scroll in place.
+- **Working links**: relative `.md` links open in darkmark, other files open in VS Code, and web/mail links open externally.
+- **Copy button** on code blocks.
+- **Reload on disk change**: the preview refreshes when the file changes outside the editor (git checkout, other tools).
+- **New logo**: a bold Markdown "M↓" mark.
+
+### Tooling
+
+- CI builds the `.vsix` on every PR.
+- Each merged PR auto-releases: version bump from labels (`major` / `minor` / patch), git tag, GitHub Release with the `.vsix` attached.
+
+### Known Limitations
+
+- H.264 `.mp4` may not play (VS Code ships without proprietary codecs). Use `.webm`.
+- Preview is still read-only, and checkboxes can't be toggled. PDF export is not planned yet.
+
+---
+
 ## v1.0.0 — 2026-04-10
 
 ### Initial Release

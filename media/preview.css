@@ -104,6 +104,26 @@ em     { font-style: italic; }
   letter-spacing: 0.05em;
 }
 
+/* Copy button — shown on hover, sits under the language badge */
+.copy-btn {
+  position: absolute;
+  top: 30px;
+  right: 10px;
+  padding: 2px 8px;
+  background: #21262d;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.code-block:hover .copy-btn,
+.copy-btn:focus-visible { opacity: 1; }
+.copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
 /* highlight.js overrides — keep bg consistent */
 .hljs { background: transparent; }
 
@@ -158,11 +178,37 @@ ul, ol {
 
 li { margin: 0.3em 0; }
 
-/* ── Images ────────────────────────────────────────────────────────── */
-img {
+/* ── Images & media ────────────────────────────────────────────────── */
+img, video {
   max-width: 100%;
   border-radius: 6px;
   border: 1px solid var(--border);
+}
+
+video { display: block; margin: 1em 0; background: #000; }
+audio { display: block; width: 100%; margin: 1em 0; }
+iframe { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; }
+
+/* ── Task lists ────────────────────────────────────────────────────── */
+.task-list-item { list-style: none; }
+.task-list-item input {
+  margin: 0 0.5em 0 -1.4em;
+  accent-color: var(--green);
+  vertical-align: middle;
+}
+
+/* ── Math & diagrams ───────────────────────────────────────────────── */
+.katex { color: var(--text-primary); }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.4em 0; }
+
+pre.mermaid {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1em;
+  margin: 1em 0;
+  text-align: center;
+  overflow-x: auto;
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────── */
@@ -175,7 +221,7 @@ img {
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 /* ── Edit Source button ────────────────────────────────────────────── */
-#edit-source-btn {
+#edit-source-btn, #toc-btn {
   position: fixed;
   bottom: 24px;
   right: 24px;
@@ -194,7 +240,38 @@ img {
   z-index: 100;
 }
 
-#edit-source-btn:hover {
+#toc-btn { right: auto; left: 24px; }
+#toc-btn[hidden] { display: none; }
+
+#edit-source-btn:hover, #toc-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* ── Table of contents ─────────────────────────────────────────────── */
+#toc {
+  position: fixed;
+  bottom: 68px;
+  left: 24px;
+  width: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 100;
+}
+#toc[hidden] { display: none; }
+#toc a {
+  display: block;
+  padding: 3px 16px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#toc a:hover { color: var(--accent); text-decoration: none; background: #21262d; }
+#toc .toc-h2 { padding-left: 28px; }
+#toc .toc-h3 { padding-left: 40px; }

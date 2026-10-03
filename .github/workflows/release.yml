@@ -1,0 +1,68 @@
+name: Release
+
+# On every merged PR into main: bump version (unless the PR already bumped it),
+# tag, build the .vsix and publish a GitHub Release.
+# Bump size comes from PR labels: `major`, `minor`, otherwise patch.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Bump version
+        id: version
+        env:
+          BUMP: ${{ contains(github.event.pull_request.labels.*.name, 'major') && 'major' || contains(github.event.pull_request.labels.*.name, 'minor') && 'minor' || 'patch' }}
+        run: |
+          CUR=$(node -p "require('./package.json').version")
+          # Version not released yet -> the PR bumped it by hand; ship it as-is
+          if git rev-parse -q --verify "refs/tags/v$CUR" >/dev/null; then
+            npm version "$BUMP" --no-git-tag-version
+          fi
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        run: npx vsce package
+
+      - name: Commit and tag
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet package.json package-lock.json; then
+            git commit -m "chore(release): v$V [skip ci]" package.json package-lock.json
+            git push origin main
+          fi
+          git tag "v$V"
+          git push origin "v$V"
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.version.outputs.version }}
+        run: gh release create "v$V" "darkmark-$V.vsix" --title "v$V" --generate-notes
