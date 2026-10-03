@@ -4,6 +4,10 @@
 
 A VS Code extension that opens `.md` files as a rendered dark-themed preview instead of raw text.
 
+[![darkmark v2 demo](media/demo.gif)](media/demo.mp4)
+
+<sub>Click for the full-quality video with sound.</sub>
+
 ## Features
 
 - Auto-renders all `.md` files in a dark-themed webview

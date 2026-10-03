@@ -11,3 +11,5 @@ node_modules/@vscode/
 **/*.map
 test/
 .github/
+media/demo.*
+brag-output/
