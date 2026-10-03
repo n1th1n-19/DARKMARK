@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
 import katex from '@vscode/markdown-it-katex';
@@ -81,6 +82,9 @@ export function renderMarkdown(
   const logoUri = asset('media', 'logo.svg');
   const katexUri = asset('node_modules', 'katex', 'dist', 'katex.min.css');
   const baseUri = webview.asWebviewUri(docDir);
+  // Only our own <script> tags carry the nonce: raw HTML in the markdown can't load
+  // scripts from the doc folder, workspace or CDN even though those are allowed sources
+  const nonce = randomBytes(16).toString('base64');
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -93,7 +97,7 @@ export function renderMarkdown(
     content="default-src 'none';
              style-src ${webview.cspSource} https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline';
              font-src ${webview.cspSource} https://fonts.gstatic.com;
-             script-src ${webview.cspSource} https://cdnjs.cloudflare.com;
+             script-src 'nonce-${nonce}';
              img-src ${webview.cspSource} https: data:;
              media-src ${webview.cspSource} https: data:;
              frame-src https://www.youtube.com https://www.youtube-nocookie.com;" />
@@ -107,9 +111,9 @@ export function renderMarkdown(
   <div id="preview-content">
 ${body}
   </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.min.js"></script>
-  <script src="${jsUri}"></script>
+  <script nonce="${nonce}" src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script nonce="${nonce}" src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.min.js"></script>
+  <script nonce="${nonce}" src="${jsUri}"></script>
 </body>
 </html>`;
 }
