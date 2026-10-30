@@ -61,6 +61,12 @@ If you protect `main`, let `github-actions[bot]` push to it, or the bump commit 
 - [Mermaid](https://mermaid.js.org/) — diagrams
 - VS Code `CustomReadonlyEditorProvider` API
 
+## A note before you dig in
+
+I apologize to whoever finds this repo: I built this entire project with AI.
+
+The idea, the decisions and the testing are mine, but most of the code was written with AI assistance. That means there may be rough edges, odd patterns, or things a careful developer would have done differently. If you're here to learn from the code, double-check anything before you copy it into your own work. If you spot something broken or questionable, issues and pull requests are very welcome. I'm still learning, and this project is part of that.
+
 ## License
 
 MIT
