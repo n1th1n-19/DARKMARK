@@ -30,6 +30,14 @@ A VS Code extension that opens `.md` files as a rendered dark-themed preview ins
 2. Open VS Code → Extensions panel → `···` menu → **Install from VSIX**
 3. Select the downloaded `.vsix` file
 
+**VSCodium** (or any fork using Open VSX): install from [Open VSX](https://open-vsx.org/extension/n1th1n-19/darkmark), or from the terminal:
+
+```bash
+codium --install-extension darkmark-X.Y.Z.vsix
+```
+
+> Upgrading from 2.0.0 (VS Code or VSCodium)? It installed as `undefined_publisher.darkmark`. Remove it first: `code --uninstall-extension undefined_publisher.darkmark` (or `codium …`).
+
 ## Usage
 
 Open any `.md` file — darkmark takes over automatically and renders it as a preview.

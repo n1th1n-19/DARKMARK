@@ -1,5 +1,22 @@
 # Release Notes
 
+## v2.0.1
+
+### Fixes
+
+- **v2.0.0 failed to start.** The packaged extension was missing its math dependency (`@vscode/markdown-it-katex`). It now ships, and CI checks for it.
+- **VSCodium support.** The extension now has a publisher id (`n1th1n-19.darkmark`) and can be installed from Open VSX.
+
+### Upgrading
+
+2.0.0 installed as `undefined_publisher.darkmark`, so it won't be replaced automatically. Uninstall it first:
+
+```bash
+code --uninstall-extension undefined_publisher.darkmark   # or: codium …
+```
+
+---
+
 ## v2.0.0 — 2026-10-03
 
 ### Highlights
@@ -60,7 +77,7 @@
 
 ### Installation
 
-1. Download `darkmark-1.0.0.vsix` from the [releases page](https://github.com/n1th1n/darkmark/releases).
+1. Download `darkmark-1.0.0.vsix` from the [releases page](https://github.com/n1th1n-19/DARKMARK/releases).
 2. Open VS Code → Extensions panel → `···` menu → **Install from VSIX**.
 3. Select `darkmark-1.0.0.vsix`.
 4. Reload VS Code — all `.md` files will now open in the dark preview.

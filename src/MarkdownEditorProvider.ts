@@ -3,8 +3,6 @@ import * as vscode from 'vscode';
 import { renderMarkdown } from './markdownEngine';
 
 export class MarkdownEditorProvider implements vscode.CustomReadonlyEditorProvider {
-  private readonly webviews = new Map<string, vscode.Webview>();
-
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   async openCustomDocument(uri: vscode.Uri): Promise<vscode.CustomDocument> {
@@ -29,9 +27,6 @@ export class MarkdownEditorProvider implements vscode.CustomReadonlyEditorProvid
         ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri),
       ],
     };
-
-    this.webviews.set(key, webview);
-    webviewPanel.onDidDispose(() => this.webviews.delete(key));
 
     const readFile = async () =>
       Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
@@ -60,10 +55,13 @@ export class MarkdownEditorProvider implements vscode.CustomReadonlyEditorProvid
           }
           break;
         case 'openLink': {
-          const target = vscode.Uri.joinPath(
-            docDir,
-            decodeURIComponent(String(message.href).split(/[?#]/)[0])
-          );
+          let rel: string;
+          try {
+            rel = decodeURIComponent(String(message.href).split(/[?#]/)[0]);
+          } catch {
+            break; // malformed %-escape in an untrusted link: ignore the click
+          }
+          const target = vscode.Uri.joinPath(docDir, rel);
           if (/\.(md|markdown)$/i.test(target.path)) {
             vscode.commands.executeCommand('vscode.openWith', target, 'darkmark.preview');
           } else {

@@ -74,6 +74,17 @@ jobs:
           V: ${{ steps.version.outputs.version }}
         run: gh release create "v$V" "darkmark-$V.vsix" --title "v$V" --generate-notes
 
+      # Optional: set the OVSX_PAT repo secret to also publish to Open VSX (VSCodium's
+      # marketplace). Token is scoped to this step; a failure here never blocks the bump push.
+      - name: Publish to Open VSX
+        continue-on-error: true
+        env:
+          V: ${{ steps.version.outputs.version }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then echo "OVSX_PAT not set, skipping"; exit 0; fi
+          npx --yes ovsx publish "darkmark-$V.vsix" -p "$OVSX_PAT"
+
       # Last, so a conflict here never blocks the release. main may have moved past
       # this merge; the bump commit only touches version fields, so rebase onto it.
       - name: Push version bump to main
