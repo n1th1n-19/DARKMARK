@@ -60,7 +60,7 @@
 
 ### Installation
 
-1. Download `darkmark-1.0.0.vsix` from the [releases page](https://github.com/n1th1n/darkmark/releases).
+1. Download `darkmark-1.0.0.vsix` from the [releases page](https://github.com/n1th1n-19/DARKMARK/releases).
 2. Open VS Code → Extensions panel → `···` menu → **Install from VSIX**.
 3. Select `darkmark-1.0.0.vsix`.
 4. Reload VS Code — all `.md` files will now open in the dark preview.

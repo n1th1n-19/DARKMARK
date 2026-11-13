@@ -23,6 +23,9 @@ jobs:
   release:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    env:
+      # Optional: set this repo secret to also publish to Open VSX (VSCodium's marketplace)
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,6 +76,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ steps.version.outputs.version }}
         run: gh release create "v$V" "darkmark-$V.vsix" --title "v$V" --generate-notes
+
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: npx --yes ovsx publish "darkmark-$V.vsix" -p "$OVSX_PAT"
 
       # Last, so a conflict here never blocks the release. main may have moved past
       # this merge; the bump commit only touches version fields, so rebase onto it.
