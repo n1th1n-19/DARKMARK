@@ -36,7 +36,7 @@ A VS Code extension that opens `.md` files as a rendered dark-themed preview ins
 codium --install-extension darkmark-X.Y.Z.vsix
 ```
 
-> Upgrading from 2.0.0? It installed as `undefined_publisher.darkmark`. Remove it first: `codium --uninstall-extension undefined_publisher.darkmark`.
+> Upgrading from 2.0.0 (VS Code or VSCodium)? It installed as `undefined_publisher.darkmark`. Remove it first: `code --uninstall-extension undefined_publisher.darkmark` (or `codium …`).
 
 ## Usage
 
