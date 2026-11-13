@@ -3,7 +3,7 @@
   "displayName": "darkmark",
   "publisher": "n1th1n-19",
   "description": "Renders .md files as a dark-themed preview in VS Code, with images, video, math, Mermaid and more",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "engines": {
     "vscode": "^1.74.0"
   },
