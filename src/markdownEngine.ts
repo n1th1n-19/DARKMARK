@@ -1,7 +1,7 @@
-import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
 import katex from '@vscode/markdown-it-katex';
+import { shell } from './webviewShell';
 
 const md = new MarkdownIt({
   html: true,
@@ -77,45 +77,31 @@ export function renderMarkdown(
     return body;
   }
 
-  const asset = (...path: string[]) =>
+  const extUri = (...path: string[]) =>
     webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, ...path));
-  const cssUri = asset('media', 'preview.css');
-  const jsUri = asset('media', 'preview.js');
-  const logoUri = asset('media', 'logo.svg');
-  const katexUri = asset('node_modules', 'katex', 'dist', 'katex.min.css');
   const baseUri = webview.asWebviewUri(docDir);
-  // Only our own <script> tags carry the nonce: raw HTML in the markdown can't load
-  // scripts from the doc folder, workspace or CDN even though those are allowed sources
-  const nonce = randomBytes(16).toString('base64');
+  const CDN = 'https://cdnjs.cloudflare.com/ajax/libs';
 
-  return /* html */ `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <base href="${baseUri}/" />
-  <link rel="icon" type="image/svg+xml" href="${logoUri}" />
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none';
-             style-src ${webview.cspSource} https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline';
-             font-src ${webview.cspSource} https://fonts.gstatic.com;
-             script-src 'nonce-${nonce}';
-             img-src ${webview.cspSource} https: data:;
-             media-src ${webview.cspSource} https: data:;
-             frame-src https://www.youtube.com https://www.youtube-nocookie.com;" />
+  return shell(webview, context, {
+    title: 'darkmark',
+    // The doc folder, workspace and CDN are allowed sources, but scripts still need the nonce
+    csp: (src, nonce) =>
+      `default-src 'none'; ` +
+      `style-src ${src} https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'; ` +
+      `font-src ${src} https://fonts.gstatic.com; ` +
+      `script-src 'nonce-${nonce}'; ` +
+      `img-src ${src} https: data:; ` +
+      `media-src ${src} https: data:; ` +
+      `frame-src https://www.youtube.com https://www.youtube-nocookie.com;`,
+    styles: [['out', 'katex', 'katex.min.css'], ['media', 'preview.css']],
+    head: `<base href="${baseUri}/" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
-  <link rel="stylesheet" href="${katexUri}" />
-  <link rel="stylesheet" href="${cssUri}" />
-  <title>darkmark</title>
-</head>
-<body>
-  <div id="preview-content">
-${body}
-  </div>
-  <script nonce="${nonce}" src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script nonce="${nonce}" src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.15.0/mermaid.min.js"></script>
-  <script nonce="${nonce}" src="${jsUri}"></script>
-</body>
-</html>`;
+  <link rel="stylesheet" href="${CDN}/highlight.js/11.9.0/styles/atom-one-dark.min.css" />`,
+    body: `  <div id="preview-content">\n${body}\n  </div>`,
+    classicScripts: [
+      `${CDN}/highlight.js/11.9.0/highlight.min.js`,
+      `${CDN}/mermaid/11.15.0/mermaid.min.js`,
+      String(extUri('media', 'preview.js')),
+    ],
+  });
 }

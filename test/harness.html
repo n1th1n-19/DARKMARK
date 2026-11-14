@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!--
+  Dev harness: runs a viewer bundle in a normal browser, outside VS Code.
+  From the repo root:  npm run build && python3 -m http.server 8123
+  Then open:           http://localhost:8123/test/harness.html?viewer=pdf&file=test/assets/sample.pdf
+  Same CSP shape as the real webview ('self' stands in for the webview source).
+  Call window.reloadFile() in the console to simulate an on-disk change.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'nonce-harness'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; worker-src blob:;" />
+  <link rel="stylesheet" href="/media/tokens.css" />
+  <link rel="stylesheet" href="/media/viewer.css" />
+  <title>darkmark harness</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script nonce="harness">
+    const q = new URLSearchParams(location.search);
+    const viewer = q.get('viewer');
+    const file = '/' + q.get('file');
+    const app = document.getElementById('app');
+    window.posted = [];
+    // Mock of the VS Code webview API; state survives reloads like setState does
+    window.acquireVsCodeApi = () => ({
+      postMessage: (m) => { window.posted.push(m); console.log('postMessage', m); },
+      getState: () => JSON.parse(sessionStorage.getItem('state') || 'null'),
+      setState: (s) => sessionStorage.setItem('state', JSON.stringify(s)),
+    });
+    window.reloadFile = async () => {
+      const size = Number((await fetch(file, { method: 'HEAD' })).headers.get('content-length'));
+      window.postMessage({ command: 'reload', src: file + '?v=' + Date.now(), size }, '*');
+    };
+    (async () => {
+      const res = await fetch(file, { method: 'HEAD' });
+      Object.assign(app.dataset, {
+        src: file + '?v=1',
+        ext: location.origin,
+        name: file.split('/').pop(),
+        size: res.headers.get('content-length'),
+      });
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = `/out/webview/${viewer}.css`;
+      document.head.append(css);
+      const s = document.createElement('script');
+      s.type = 'module';
+      s.nonce = 'harness';
+      s.src = `/out/webview/${viewer}.js`;
+      document.body.append(s);
+    })();
+  </script>
+</body>
+</html>

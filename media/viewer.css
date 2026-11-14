@@ -1,0 +1,52 @@
+/* Shared chrome for the file viewers (sheet, docx, pdf, image, slides) */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: 13px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow: hidden;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* Toolbar: viewer controls on the left, "Open with default editor" on the right */
+.dm-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.dm-toolbar .dm-spacer { flex: 1; }
+.dm-toolbar .dm-info { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.dm-btn, .dm-input {
+  font: inherit;
+  color: var(--text-primary);
+  background: #21262d;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+}
+.dm-btn { cursor: pointer; }
+.dm-btn:hover { border-color: var(--accent); }
+.dm-btn[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
+.dm-btn:disabled { opacity: 0.5; cursor: default; }
+.dm-input { width: 5em; }
+
+/* Main scrolling area */
+.dm-view { flex: 1; overflow: auto; position: relative; }
+
+.dm-message {
+  margin: 48px auto;
+  max-width: 560px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.dm-message.dm-error { color: #f85149; }

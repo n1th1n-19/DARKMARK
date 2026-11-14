@@ -2,7 +2,7 @@
   "name": "darkmark",
   "displayName": "darkmark",
   "publisher": "n1th1n-19",
-  "description": "Renders .md files as a dark-themed preview in VS Code, with images, video, math, Mermaid and more",
+  "description": "Dark-themed viewers for Markdown, spreadsheets, Word, PDF and images in VS Code and VSCodium",
   "version": "2.0.1",
   "engines": {
     "vscode": "^1.74.0"
@@ -13,7 +13,8 @@
   },
   "icon": "media/logo.png",
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
@@ -28,6 +29,89 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "darkmark.sheet",
+        "displayName": "darkmark Sheet",
+        "selector": [
+          {
+            "filenamePattern": "*.xlsx"
+          },
+          {
+            "filenamePattern": "*.xls"
+          },
+          {
+            "filenamePattern": "*.ods"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "darkmark.csv",
+        "displayName": "darkmark Sheet",
+        "selector": [
+          {
+            "filenamePattern": "*.csv"
+          },
+          {
+            "filenamePattern": "*.tsv"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "darkmark.docx",
+        "displayName": "darkmark Word",
+        "selector": [
+          {
+            "filenamePattern": "*.docx"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "darkmark.pdf",
+        "displayName": "darkmark PDF",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "darkmark.image",
+        "displayName": "darkmark Image",
+        "selector": [
+          {
+            "filenamePattern": "*.png"
+          },
+          {
+            "filenamePattern": "*.jpg"
+          },
+          {
+            "filenamePattern": "*.jpeg"
+          },
+          {
+            "filenamePattern": "*.gif"
+          },
+          {
+            "filenamePattern": "*.webp"
+          },
+          {
+            "filenamePattern": "*.svg"
+          },
+          {
+            "filenamePattern": "*.bmp"
+          },
+          {
+            "filenamePattern": "*.ico"
+          },
+          {
+            "filenamePattern": "*.avif"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "commands": [
@@ -38,20 +122,27 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "vscode:prepublish": "npm run build",
+    "typecheck": "tsc --noEmit -p ./ && tsc --noEmit -p ./tsconfig.webview.json",
+    "build": "npm run typecheck && node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node --test test/*.test.mjs",
+    "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.0.0",
     "@types/node": "^25.5.2",
     "@types/vscode": "^1.74.0",
     "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.25.10",
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "@vscode/markdown-it-katex": "^1.1.2",
-    "markdown-it": "^14.0.0"
+    "jszip": "^3.10.1",
+    "mammoth": "^1.9.1",
+    "markdown-it": "^14.0.0",
+    "pdfjs-dist": "^4.10.38",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
