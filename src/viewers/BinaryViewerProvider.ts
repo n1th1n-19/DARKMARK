@@ -1,6 +1,7 @@
 import { existsSync } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { watchFile } from '../watchFile';
 import { escapeHtml, shell, viewerCsp } from '../webviewShell';
 
 export interface Viewer {
@@ -43,15 +44,19 @@ export class BinaryViewerProvider implements vscode.CustomReadonlyEditorProvider
     const css = ['out', 'webview', `${this.viewer.script}.css`];
     const hasCss = existsSync(path.join(this.context.extensionUri.fsPath, ...css));
 
-    webview.html = shell(webview, this.context, {
+    // Rebuilt when a hidden tab comes back after the file changed: a hidden webview gets
+    // no messages, and on show it reloads this HTML with its (old) cache-buster
+    let shownMtime = stat.mtime;
+    const render = (s: vscode.FileStat) => (webview.html = shell(webview, this.context, {
       title: name,
       csp: viewerCsp(this.viewer.csp),
       // A viewer that imports CSS gets out/webview/<script>.css from esbuild
       styles: [['media', 'viewer.css'], ...(hasCss ? [css] : [])],
       scripts: [['out', 'webview', `${this.viewer.script}.js`]],
-      body: `<div id="app" data-src="${escapeHtml(fileUrl(stat))}" data-ext="${escapeHtml(ext)}" ` +
-        `data-name="${escapeHtml(name)}" data-size="${stat.size}"></div>`,
-    });
+      body: `<div id="app" data-src="${escapeHtml(fileUrl(s))}" data-ext="${escapeHtml(ext)}" ` +
+        `data-name="${escapeHtml(name)}" data-size="${s.size}"></div>`,
+    }));
+    render(stat);
 
     const disposables: vscode.Disposable[] = [];
     webview.onDidReceiveMessage(
@@ -67,9 +72,6 @@ export class BinaryViewerProvider implements vscode.CustomReadonlyEditorProvider
       disposables
     );
 
-    // Tell the webview to fetch again when the file changes on disk
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(dir, name));
-    disposables.push(watcher);
     let timer: NodeJS.Timeout | undefined;
     const reload = () => {
       clearTimeout(timer);
@@ -77,14 +79,29 @@ export class BinaryViewerProvider implements vscode.CustomReadonlyEditorProvider
       timer = setTimeout(async () => {
         try {
           const s = await vscode.workspace.fs.stat(uri);
+          if (s.mtime === shownMtime) return;
+          if (!panel.visible) return; // picked up by onDidChangeViewState
+          shownMtime = s.mtime;
           webview.postMessage({ command: 'reload', src: fileUrl(s), size: s.size });
         } catch {
           // File deleted or mid-rename: keep showing the last version
         }
       }, 200);
     };
-    watcher.onDidChange(reload, undefined, disposables);
-    watcher.onDidCreate(reload, undefined, disposables);
+    // Tell the webview to fetch again when the file changes on disk
+    disposables.push(watchFile(uri, reload));
+    panel.onDidChangeViewState(async () => {
+      if (!panel.visible) return;
+      try {
+        const s = await vscode.workspace.fs.stat(uri);
+        if (s.mtime !== shownMtime) {
+          shownMtime = s.mtime;
+          render(s);
+        }
+      } catch {
+        // File gone: keep the last version
+      }
+    }, undefined, disposables);
 
     panel.onDidDispose(() => {
       clearTimeout(timer);

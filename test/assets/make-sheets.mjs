@@ -1,8 +1,9 @@
 // Generates the sheet viewer test files. Run from the repo root: node test/assets/make-sheets.mjs
 import * as XLSX from 'xlsx';
 import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const dir = new URL('.', import.meta.url).pathname;
+const dir = fileURLToPath(new URL('.', import.meta.url));
 const regions = ['North', 'South', 'East', 'West'];
 const products = ['Widget', 'Gadget, large', 'Sprocket', 'Gizmo "pro"', 'Doohickey'];
 

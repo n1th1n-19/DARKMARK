@@ -1,6 +1,6 @@
 // Bundles the extension (Node) and every webview viewer (browser) into out/,
 // then copies runtime files that are loaded by URL rather than imported.
-import { build } from 'esbuild';
+import { build, context } from 'esbuild';
 import { cpSync, existsSync, readdirSync, rmSync } from 'fs';
 
 const watch = process.argv.includes('--watch');
@@ -12,8 +12,8 @@ rmSync('out', { recursive: true, force: true });
 const nodeEntries = { extension: 'src/extension.ts' };
 if (existsSync('src/git/index.ts')) nodeEntries.git = 'src/git/index.ts';
 
-await Promise.all([
-  build({
+const configs = [
+  {
     ...common,
     entryPoints: nodeEntries,
     outdir: 'out',
@@ -22,8 +22,8 @@ await Promise.all([
     target: 'node18',
     // ./git is required at runtime from out/git.js, never bundled into extension.js
     external: ['vscode', './git'],
-  }),
-  build({
+  },
+  {
     ...common,
     entryPoints: readdirSync('src/webview')
       .filter((f) => f.endsWith('.ts') && !['common.ts', 'env.d.ts'].includes(f))
@@ -32,8 +32,15 @@ await Promise.all([
     platform: 'browser',
     format: 'esm',
     target: 'es2022',
-  }),
-]);
+  },
+];
+
+if (watch) {
+  // Rebuild on every source change until stopped
+  for (const c of configs) await (await context(c)).watch();
+} else {
+  await Promise.all(configs.map((c) => build(c)));
+}
 
 const copy = (from, to) => cpSync(from, to, { recursive: true });
 copy('node_modules/katex/dist/katex.min.css', 'out/katex/katex.min.css');

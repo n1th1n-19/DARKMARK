@@ -1,6 +1,6 @@
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { renderMarkdown } from './markdownEngine';
+import { watchFile } from './watchFile';
 
 export class MarkdownEditorProvider implements vscode.CustomReadonlyEditorProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -79,10 +79,7 @@ export class MarkdownEditorProvider implements vscode.CustomReadonlyEditorProvid
     });
 
     // Live update when the file changes on disk (git checkout, other tools)
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(docDir, path.posix.basename(uri.path))
-    );
-    watcher.onDidChange(async () => {
+    const watcher = watchFile(uri, async () => {
       // Unsaved edits in a text editor win over the file on disk
       if (vscode.workspace.textDocuments.some((d) => d.uri.toString() === key && d.isDirty)) {
         return;

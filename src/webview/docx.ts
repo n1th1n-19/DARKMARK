@@ -6,8 +6,11 @@ import './docx.css';
 const TAGS = new Set([
   'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'STRONG', 'EM', 'U', 'S', 'SUB', 'SUP', 'A',
   'UL', 'OL', 'LI', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'BR', 'IMG',
-  'BLOCKQUOTE', 'PRE', 'CODE', 'SPAN',
+  'BLOCKQUOTE', 'PRE', 'CODE', 'SPAN', 'DIV', 'INPUT',
 ]);
+// Removed with their content. Any other unknown element is unwrapped so its text survives
+// (mammoth style maps can emit arbitrary tags such as aside or section)
+const DROP = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH', 'TEMPLATE', 'LINK', 'META', 'BASE', 'FORM', 'NOSCRIPT', 'TEXTAREA', 'SELECT', 'BUTTON']);
 // Bookmark/footnote ids are kept with this prefix so they cannot clash with (or clobber) the viewer's own ids
 const ID_PREFIX = 'dm-doc-';
 
@@ -25,7 +28,19 @@ function sanitize(html: string): DocumentFragment {
   // DOMParser documents are inert: nothing loads or runs while we clean it
   const body = new DOMParser().parseFromString(html, 'text/html').body;
   for (const el of Array.from(body.querySelectorAll('*'))) {
-    if (!TAGS.has(el.tagName)) { el.remove(); continue; }
+    if (!el.isConnected) continue; // inside an element dropped earlier
+    if (DROP.has(el.tagName.toUpperCase())) { el.remove(); continue; }
+    if (!TAGS.has(el.tagName)) { el.replaceWith(...Array.from(el.childNodes)); continue; }
+    // Legacy Word checkboxes: keep them as read-only checkboxes, drop any other input
+    if (el.tagName === 'INPUT') {
+      if (el.getAttribute('type') !== 'checkbox') { el.remove(); continue; }
+      const checked = el.hasAttribute('checked');
+      for (const a of Array.from(el.attributes)) el.removeAttribute(a.name);
+      el.setAttribute('type', 'checkbox');
+      el.setAttribute('disabled', '');
+      if (checked) el.setAttribute('checked', '');
+      continue;
+    }
     for (const { name, value } of Array.from(el.attributes)) {
       const keep =
         (name === 'href' && el.tagName === 'A') ||

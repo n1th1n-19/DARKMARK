@@ -7,7 +7,7 @@ type Mode = 'fit' | '1:1' | 'free';
 const state = getState({ mode: 'fit' as Mode, zoom: 1, x: 0, y: 0 });
 const MIN = 0.02, MAX = 64, STEP = 1.25;
 
-const img = h('img', { className: 'dm-image', decoding: 'async', draggable: false, alt: '' });
+const img = h('img', { className: 'dm-image', decoding: 'async', draggable: false, alt: fileInfo().name });
 const view = h('div', { className: 'dm-view dm-image-view' });
 const btn = (text: string, title: string, onclick: () => void) => h('button', { className: 'dm-btn', title, onclick }, text);
 const fitBtn = btn('Fit', 'Fit to window (0)', () => setMode('fit'));
@@ -101,7 +101,16 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '-' || e.key === '_') zoomBy(1 / STEP);
   else if (e.key === '0') setMode('fit');
   else if (e.key === '1') setMode('1:1');
-  else return;
+  else if (e.key.startsWith('Arrow')) {
+    // Keyboard panning; clampPan in render keeps the image inside the view
+    const d = e.shiftKey ? 200 : 50;
+    if (e.key === 'ArrowLeft') state.x += d;
+    else if (e.key === 'ArrowRight') state.x -= d;
+    else if (e.key === 'ArrowUp') state.y += d;
+    else if (e.key === 'ArrowDown') state.y -= d;
+    else return;
+    render();
+  } else return;
   e.preventDefault();
 });
 

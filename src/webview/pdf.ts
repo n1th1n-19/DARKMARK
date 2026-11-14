@@ -242,17 +242,19 @@ async function addLinks(page: PDFPageProxy, p: Page, viewport: ReturnType<PDFPag
 
 // ---- Search ------------------------------------------------------------------
 let lastQuery = '';
+let searchGen = 0; // a newer search (or clearing the box) cancels an older one
 async function search(q: string, dir: 1 | -1): Promise<void> {
+  const g = ++searchGen;
   const d = doc;
   const needle = q.trim().toLowerCase();
-  if (!d || !needle) { searchInfo.textContent = ''; return; }
+  if (!d || !needle) { searchInfo.textContent = ''; lastQuery = ''; return; }
   if (needle !== lastQuery) searchInfo.textContent = 'Searching…';
   lastQuery = needle;
   for (let i = 0; i < pages.length; i++) {
     if (texts[i] !== undefined) continue;
     const page = await d.getPage(i + 1);
     const tc = await page.getTextContent();
-    if (d !== doc) return;
+    if (d !== doc || g !== searchGen) return;
     texts[i] = tc.items.map((it) => ('str' in it ? it.str + (it.hasEOL ? ' ' : '') : '')).join('').toLowerCase();
     if (!wanted.has(i)) page.cleanup();
   }
@@ -278,12 +280,16 @@ async function teardown(): Promise<void> {
   await old?.destroy(); // also destroys its PDFDocumentProxy
 }
 
+let loadGen = 0; // a newer load wins; an older one stops at its next await
 onFile(async ({ src, ext }) => {
+  const gen = ++loadGen;
   if (pages.length) saveState(); // keep page and zoom across reloads
   await teardown();
+  if (gen !== loadGen) return;
   message(view, 'Loading…');
   try {
     await ensureWorker(ext);
+    if (gen !== loadGen) return;
     const task = (loading = getDocument({
       url: src,
       disableAutoFetch: true,
@@ -298,14 +304,14 @@ onFile(async ({ src, ext }) => {
         ? 'Incorrect password.' : 'This PDF is password-protected. Password-protected PDFs are not supported yet.', true);
     };
     const d = await task.promise;
-    if (task !== loading) return void d.destroy();
+    if (gen !== loadGen) return void d.destroy();
     doc = d;
     const n = d.numPages;
     // ponytail: >300 pages are sized from page 1 and corrected when rendered; may jump on mixed-size docs
     const sized = n <= 300
       ? await Promise.all(Array.from({ length: n }, (_, i) => d.getPage(i + 1).then((pg) => pg.getViewport({ scale: 1 }))))
       : [(await d.getPage(1)).getViewport({ scale: 1 })];
-    if (task !== loading) return;
+    if (gen !== loadGen) return;
     pages = Array.from({ length: n }, (_, i) => {
       const vp = sized[i] ?? sized[0];
       const el = h('div', { className: 'pdf-page' });
@@ -320,7 +326,7 @@ onFile(async ({ src, ext }) => {
     pages.forEach((p) => io.observe(p.el));
     saveState();
   } catch (e) {
-    if (!loading) return; // torn down while loading
+    if (gen !== loadGen) return; // a newer load replaced this one
     const name = (e as Error)?.name;
     const text = name === 'PasswordException' ? '' // handled by onPassword
       : name === 'InvalidPDFException' ? 'This file is not a valid PDF, or it is damaged.'
