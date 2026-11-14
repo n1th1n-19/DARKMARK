@@ -1,6 +1,6 @@
 # darkmark v3 plan — file viewers, Git client, GitHub
 
-Status as of 2026-11-14. Phase 0 is shipped; the other phases are not started.
+Status as of 2026-11-14. Phase 0 is shipped; the later phases ship in order (1, 1b, 2, 3).
 
 ## Goal
 
@@ -34,15 +34,17 @@ Everything ships in the one `darkmark` extension. Each phase is its own branch a
 
 ## Memory budget
 
-This applies to every phase. Measure with **Developer: Open Process Explorer** in VSCodium.
+This applies to every phase. Each viewer runs in its own renderer process. A renderer showing a near-empty viewer uses about 120 MB on its own (measured in VSCodium 1.143 on Linux), and that baseline differs by platform. So the budget is the growth above it. Check it in **Developer: Open Process Explorer**, or as the RSS of the viewer's renderer process.
 
-| Case | Limit (webview process) |
-|---|---|
-| 100-page PDF, scrolled end to end | 250 MB |
-| 50,000-row sheet | 250 MB |
-| 20 MB docx with images | 200 MB |
-| Git panel, 5,000 commits scrolled | 200 MB |
-| Extension host, darkmark's share, idle after closing all darkmark tabs | back within 20 MB of the starting level |
+| Case | Limit above an empty viewer | Measured (v3.0.0) |
+|---|---|---|
+| 100-page PDF, scrolled end to end | 150 MB | +138 MB (JS heap 2.4 MB after GC) |
+| 50,000-row CSV, scrolled end to end | 150 MB | +101 MB (JS heap 13.7 MB after GC) |
+| 20 MB docx with images | 150 MB | +97 MB (JS heap 3.4 MB after GC) |
+| Git panel, 5,000 commits scrolled | 150 MB | — |
+| A hidden viewer tab | back near the baseline | yes: the webview is torn down and restored from `setState` |
+
+The measurements come from an automated run in an isolated VSCodium window, driven over the DevTools protocol: open each file, scroll it end to end, force a GC inside the webview, then read its renderer's RSS.
 
 Rules:
 
@@ -115,7 +117,7 @@ Markdown keeps its own provider because it live-syncs with the text editor.
 
 | Viewer | File types | Library | Behaviour and memory |
 |---|---|---|---|
-| Sheet | xlsx, xls, ods, csv, tsv | SheetJS, installed from the `cdn.sheetjs.com` tarball (the npm `xlsx@0.18.5` has known CVEs) | Sheet tabs, sticky header row and column, number/date/text styling. Parse with `{ dense: true, sheetRows: 50001 }` and only the active sheet (`sheets` option). Rows are virtualized: only the visible rows plus a 50-row buffer are in the DOM. First 50,000 rows only. |
+| Sheet | xlsx, xls, ods, csv, tsv | SheetJS, installed from the `cdn.sheetjs.com` tarball (the npm `xlsx@0.18.5` has known CVEs) | Sheet tabs, sticky header row and column, number/date/text styling. xlsx/xls/ods: parse with `{ dense: true, sheetRows: 50002 }` and only the active sheet (`sheets` option); the extra row detects a cut sheet. CSV/TSV skip SheetJS and use an own RFC 4180 parser (`src/webview/lib/csv.ts`) that goes straight to display strings. Rows are virtualized: only the visible rows plus a 50-row buffer are in the DOM. First 50,000 rows only. |
 | Word | docx | mammoth (browser build) | Converted to HTML in the dark theme. Images go through `convertImage` into blob URLs, not base64. |
 | PDF | pdf | pdfjs-dist | Pages, zoom, page navigation, selectable/searchable text layer. Only visible pages ±1 are rendered; when a page leaves that range its canvas is set to 0×0 and `page.cleanup()` runs. Canvas scale is capped at `min(devicePixelRatio, 2)`. The worker is fetched from `out/pdfjs/` and started from a blob URL. |
 | Image | png, jpg, jpeg, gif, webp, svg, bmp, ico, avif | none | Fit / 1:1 / wheel zoom / pan, checkerboard background, dimensions and file size. Plain `<img decoding="async">` pointing at the webview URI. Zoom and pan use CSS `transform`, with no canvas copy. |
@@ -144,7 +146,7 @@ docx content is untrusted. It is rendered inside the shell's CSP, which only run
 - Add `test/assets/sample.{xlsx,csv,docx,pdf,png}`, plus a 100-page PDF and a 50,000-row CSV for the memory checks.
 - Each opens in VSCodium with no activation error ("Developer: Show Running Extensions").
 - Markdown preview still works, math included (`test/fixture.md`).
-- The memory budget holds for the PDF, sheet and docx cases.
+- The memory budget holds for the PDF, CSV and docx cases.
 - Switching to another tab and back restores the page, zoom and scroll.
 
 ---

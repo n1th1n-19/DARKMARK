@@ -1,5 +1,29 @@
 # Release Notes
 
+## v3.0.0
+
+### New: file viewers
+
+darkmark now opens more than Markdown:
+
+- **Spreadsheets** (`.xlsx`, `.xls`, `.ods`) open in a dark grid with sheet tabs, sticky column letters and row numbers, and styled numbers, dates and booleans. CSV and TSV files can use the same grid through **Open With…**.
+- **Word documents** (`.docx`) are shown as a readable page with headings, lists, tables, images and working links.
+- **PDFs** with page navigation, zoom, fit width, search and selectable text.
+- **Images** through **Open With…** → *darkmark Image*: fit or 1:1, zoom around the cursor, pan, and a checkerboard behind transparent areas.
+
+Each viewer has an **Open with default editor** button. To change which files open in darkmark, use `workbench.editorAssociations` (see the README).
+
+### Light on memory
+
+Viewers stream files from disk instead of copying them, draw only what's on screen, and free their memory when you switch to another tab, coming back at the same place.
+
+### Under the hood
+
+- The extension is now bundled with esbuild, and the package no longer ships `node_modules`.
+- Math in Markdown previews loads its styles from the bundle.
+
+---
+
 ## v2.0.1
 
 ### Fixes
