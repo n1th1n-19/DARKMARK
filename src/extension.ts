@@ -24,6 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Viewers don't retain context: hidden tabs free their memory and restore from setState
     ...VIEWERS.map((v) =>
       vscode.window.registerCustomEditorProvider(v.viewType, new BinaryViewerProvider(context, v), {
+        webviewOptions: { enableFindWidget: true },
         supportsMultipleEditorsPerDocument: false,
       })
     )

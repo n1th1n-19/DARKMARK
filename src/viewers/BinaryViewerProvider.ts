@@ -58,6 +58,9 @@ export class BinaryViewerProvider implements vscode.CustomReadonlyEditorProvider
       (msg) => {
         if (msg?.command === 'openDefault') {
           vscode.commands.executeCommand('vscode.openWith', uri, 'default');
+        } else if (msg?.command === 'openExternal' && /^(https?|mailto):/i.test(String(msg.href))) {
+          // Document content is untrusted: only hand web/mail links to the OS
+          vscode.env.openExternal(vscode.Uri.parse(String(msg.href)));
         }
       },
       undefined,
