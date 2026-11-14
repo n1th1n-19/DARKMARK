@@ -9,6 +9,7 @@ const VIEWERS: Viewer[] = [
   { viewType: 'darkmark.docx', script: 'docx' },
   { viewType: 'darkmark.pdf', script: 'pdf', csp: 'worker-src blob:;' },
   { viewType: 'darkmark.image', script: 'image' },
+  { viewType: 'darkmark.slides', script: 'slides' },
 ];
 
 export function activate(context: vscode.ExtensionContext) {
