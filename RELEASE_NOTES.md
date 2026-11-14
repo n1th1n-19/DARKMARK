@@ -19,6 +19,7 @@ Viewers stream files from disk instead of copying them, draw only what's on scre
 
 ### Under the hood
 
+- darkmark now needs VS Code or VSCodium 1.90 or later.
 - The extension is now bundled with esbuild, and the package no longer ships `node_modules`.
 - Math in Markdown previews loads its styles from the bundle.
 
