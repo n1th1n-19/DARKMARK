@@ -80,6 +80,16 @@
         "priority": "default"
       },
       {
+        "viewType": "darkmark.slides",
+        "displayName": "darkmark Slides",
+        "selector": [
+          {
+            "filenamePattern": "*.pptx"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "darkmark.image",
         "displayName": "darkmark Image",
         "selector": [
