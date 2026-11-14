@@ -1,0 +1,98 @@
+/* Slides viewer: thumbnail list | current slide, notes below */
+.sl-main { flex: 1; display: flex; min-height: 0; }
+
+.sl-list {
+  width: 190px;
+  flex: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 10px 10px 4px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+}
+.sl-main[data-list='closed'] .sl-list { display: none; }
+@media (max-width: 640px) {
+  .sl-main:not([data-list='open']) .sl-list { display: none; }
+}
+
+.sl-thumb {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.sl-num { width: 1.8em; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+.sl-thumb-box {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+.sl-thumb:hover .sl-thumb-box { outline-color: var(--border); }
+.sl-thumb[aria-current='true'] { color: var(--text-primary); }
+.sl-thumb[aria-current='true'] .sl-thumb-box { outline-color: var(--accent); }
+.sl-thumb-box > .sl-slide, .sl-fit > .sl-slide { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.sl-thumb-err { display: block; padding: 4px; color: #f85149; }
+
+.sl-center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sl-stage { display: flex; align-items: center; justify-content: center; }
+.sl-fit { position: relative; flex: none; box-shadow: 0 2px 16px rgba(0, 0, 0, 0.6); }
+
+/* The slide itself: document colors, not the editor theme */
+.sl-slide {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  font-size: 18pt;
+  line-height: 1.2;
+}
+.sl-shape { position: absolute; }
+.sl-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: break-word;
+}
+.sl-text p, .sl-table p { margin: 0; }
+.sl-bullet { display: inline-block; text-indent: 0; }
+.sl-img { display: block; width: 100%; height: 100%; }
+.sl-imgph { background: #c9ccd1; }
+.sl-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sl-link { cursor: pointer; }
+.sl-unsupported {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #8b949e;
+  background: rgba(139, 148, 158, 0.12);
+  color: #57606a;
+  font: 14pt system-ui, sans-serif;
+  text-align: center;
+}
+.sl-table { border-collapse: collapse; table-layout: fixed; white-space: pre-wrap; }
+.sl-table td { border: 1px solid #000; overflow: hidden; }
+
+.sl-notes {
+  flex: none;
+  max-height: 30%;
+  overflow: auto;
+  padding: 8px 16px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+}
+.sl-notes-title { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.sl-notes p { margin: 4px 0; white-space: pre-wrap; }
+.sl-notes .sl-empty { color: var(--text-muted); }

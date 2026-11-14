@@ -31,6 +31,7 @@ A VS Code and VSCodium extension that opens Markdown, spreadsheets, Word documen
 | `.xlsx` `.xls` `.ods` | yes | Sheet tabs, sticky column letters and row numbers, number/date/boolean styling |
 | `.csv` `.tsv` | no: right-click → **Open With…** → *darkmark Sheet* | The same grid, with quoted fields and embedded newlines handled |
 | `.docx` | yes | The document converted to HTML in the dark theme, with images, tables and working links |
+| `.pptx` | yes | Slide list with thumbnails, the current slide with text, shapes, images and tables, and speaker notes |
 | `.pdf` | yes | Pages, zoom, fit width, page navigation, search, selectable text |
 | `.png` `.jpg` `.gif` `.webp` `.svg` `.bmp` `.ico` `.avif` | no: **Open With…** → *darkmark Image* | Fit / 1:1, wheel zoom around the cursor, drag to pan, checkerboard behind transparency, size info |
 
@@ -45,7 +46,7 @@ To turn a viewer off, or make one the default, use VS Code's own setting:
 }
 ```
 
-View types: `darkmark.preview` (Markdown), `darkmark.sheet`, `darkmark.csv`, `darkmark.docx`, `darkmark.pdf`, `darkmark.image`.
+View types: `darkmark.preview` (Markdown), `darkmark.sheet`, `darkmark.csv`, `darkmark.docx`, `darkmark.slides`, `darkmark.pdf`, `darkmark.image`.
 
 ### Light on memory
 
@@ -56,6 +57,7 @@ View types: `darkmark.preview` (Markdown), `darkmark.sheet`, `darkmark.csv`, `da
 ### Limits
 
 - Sheets show the first 50,000 rows and 1,000 columns.
+- Slides are approximate: SmartArt, charts, video and embedded objects show as a labelled box, and animations and transitions are not played.
 - Password-protected PDFs aren't supported yet.
 - Video and audio files use VS Code's built-in preview.
 
