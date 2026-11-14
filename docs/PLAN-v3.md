@@ -163,7 +163,7 @@ This is split out because it needs its own slide-XML parser and is the riskiest 
 - All text is escaped. No XML is ever inserted as HTML.
 - `priority: "default"`.
 
-Acceptance: `test/assets/sample.pptx` opens; the docx memory limit holds for a 20 MB deck.
+Acceptance: `test/assets/sample.pptx` opens; the memory limit holds for a 20 MB deck (measured: +76 MB above an empty viewer).
 
 ---
 
