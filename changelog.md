@@ -1,3 +1,19 @@
+# 2026-11-14 — v3.1.0: Slides (pptx) viewer
+
+## Changes
+
+- `src/extension.ts` — registers `darkmark.slides` (script `slides`) in `VIEWERS`
+- `package.json` — `darkmark.slides` custom editor for `*.pptx`, `priority: "default"`
+- `README.md` — Slides in the viewers table and limits
+
+## New Files
+
+- `src/webview/slides.ts` — PresentationML parser (jszip + DOMParser) and DOM renderer: slide size/order, layout and master inheritance (placeholder position, text styles, backgrounds), theme colors and fonts, text bodies, bullets, pictures (blob URLs, revoked on slide change/reload), groups, tables, connectors; charts/SmartArt/OLE/video as labelled placeholders; speaker notes; lazy thumbnails (IntersectionObserver); LRU of 5 parsed slides; keyboard navigation; view state via `setState`
+- `src/webview/slides.css` — list, stage, slide and notes layout
+- `test/assets/sample.pptx` — 5 slides: title (inherited placeholders), bullets + link, image/shape/rotated text box on a colored background, table + speaker notes, group + chart
+
+---
+
 # 2026-11-14 — v3.0.0: build setup and file viewers
 
 ## Changes
