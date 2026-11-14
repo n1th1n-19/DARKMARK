@@ -1,0 +1,83 @@
+/* Word viewer: the document as a centered page, styled like the Markdown preview (media/preview.css) */
+.dm-docx-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 32px 96px;
+  font: 15px/1.7 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow-wrap: break-word;
+}
+.dm-warnings { cursor: help; color: var(--orange); }
+
+.dm-docx-page > :first-child { margin-top: 0; }
+
+.dm-docx-page h1, .dm-docx-page h2 {
+  color: var(--purple);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+  margin: 1.8em 0 0.8em;
+  line-height: 1.3;
+}
+.dm-docx-page h1 { font-size: 2rem; font-weight: 700; }
+.dm-docx-page h2 { font-size: 1.5rem; font-weight: 600; }
+.dm-docx-page h3, .dm-docx-page h4, .dm-docx-page h5, .dm-docx-page h6 {
+  font-weight: 600;
+  margin: 1.5em 0 0.6em;
+  line-height: 1.4;
+}
+.dm-docx-page h3 { font-size: 1.25rem; }
+.dm-docx-page h4 { font-size: 1.1rem; }
+.dm-docx-page h5 { font-size: 1rem; }
+.dm-docx-page h6 { font-size: 0.9rem; }
+
+.dm-docx-page p { margin: 0.8em 0; }
+.dm-docx-page a[href] { color: var(--accent); text-decoration: none; cursor: pointer; }
+.dm-docx-page a[href]:hover { text-decoration: underline; }
+.dm-docx-page strong { font-weight: 700; }
+
+.dm-docx-page ul, .dm-docx-page ol { padding-left: 1.5em; margin: 0.6em 0; }
+.dm-docx-page li { margin: 0.3em 0; }
+.dm-docx-page li > p { margin: 0; }
+
+.dm-docx-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 14px;
+}
+.dm-docx-page th, .dm-docx-page td {
+  border: 1px solid var(--border);
+  padding: 0.55em 0.9em;
+  text-align: left;
+  vertical-align: top;
+}
+.dm-docx-page th { background: var(--bg-surface); font-weight: 600; }
+.dm-docx-page td p, .dm-docx-page th p { margin: 0; }
+
+.dm-docx-page img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.dm-docx-page blockquote {
+  border-left: 3px solid var(--orange);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  margin: 1em 0;
+  padding: 0.75em 1.2em;
+  border-radius: 0 6px 6px 0;
+}
+.dm-docx-page pre, .dm-docx-page code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+}
+.dm-docx-page pre {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1em 1.2em;
+  overflow-x: auto;
+}
+.dm-docx-empty { color: var(--text-muted); text-align: center; }

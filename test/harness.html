@@ -26,8 +26,8 @@
     // Mock of the VS Code webview API; state survives reloads like setState does
     window.acquireVsCodeApi = () => ({
       postMessage: (m) => { window.posted.push(m); console.log('postMessage', m); },
-      getState: () => JSON.parse(sessionStorage.getItem('state') || 'null'),
-      setState: (s) => sessionStorage.setItem('state', JSON.stringify(s)),
+      getState: () => JSON.parse(sessionStorage.getItem('state:' + file) || 'null'),
+      setState: (s) => sessionStorage.setItem('state:' + file, JSON.stringify(s)),
     });
     window.reloadFile = async () => {
       const size = Number((await fetch(file, { method: 'HEAD' })).headers.get('content-length'));
