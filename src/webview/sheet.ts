@@ -16,6 +16,8 @@ interface ViewState { sheet: string; top: number; left: number }
 
 let state = getState<ViewState>({ sheet: '', top: 0, left: 0 });
 let loadId = 0;
+// Tears down the current grid's listeners; module-level so a reload also cleans up the previous load
+let cleanup = () => {};
 const fmt = (n: number) => n.toLocaleString('en-US');
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -112,6 +114,8 @@ async function load(info: FileInfo): Promise<void> {
     return;
   }
 
+  cleanup();
+  cleanup = () => {};
   const view = h('div', { className: 'dm-view sh-view', tabIndex: 0 });
   view.setAttribute('role', 'grid');
   view.setAttribute('aria-label', info.name);
@@ -127,7 +131,6 @@ async function load(info: FileInfo): Promise<void> {
   tabBar.setAttribute('aria-label', 'Sheets');
   app.replaceChildren(toolbar(tabBar, infoSpan, note), view);
 
-  let cleanup = () => {};
   const show = (name: string, top: number, left: number) => {
     cleanup();
     tabs.forEach((b) => b.setAttribute('aria-pressed', String(b.textContent === name)));

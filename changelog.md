@@ -2,7 +2,7 @@
 
 ## Changes
 
-- `package.json` — esbuild build (`npm run build` = typecheck + bundle), `npm test`, `vsce package --no-dependencies`; viewer custom editors (`darkmark.sheet`, `darkmark.csv`, `darkmark.docx`, `darkmark.pdf`, `darkmark.image`); SheetJS, mammoth, pdfjs-dist, jszip
+- `package.json` — `engines.vscode` ^1.90 (PDF.js needs Chromium 119+); esbuild build (`npm run build` = typecheck + bundle), `npm test`, `vsce package --no-dependencies`; viewer custom editors (`darkmark.sheet`, `darkmark.csv`, `darkmark.docx`, `darkmark.pdf`, `darkmark.image`); SheetJS, mammoth, pdfjs-dist, jszip
 - `src/extension.ts` — registers the viewers (no `retainContextWhenHidden`, find widget on)
 - `src/markdownEngine.ts` — renders through the shared shell; KaTeX CSS from `out/katex/`
 - `media/preview.css` — design tokens moved to `media/tokens.css`

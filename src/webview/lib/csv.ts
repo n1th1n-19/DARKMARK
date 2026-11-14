@@ -49,7 +49,12 @@ export function parseDelimited(src: string, sep: string): Sheet {
     }
     if (row.length < MAX_COLS) row.push(v);
     else if (row.length === MAX_COLS) cols = MAX_COLS + 1;
-    if (src[i] === sep) { i++; continue; }
+    if (src[i] === sep) {
+      i++;
+      // "a,b," at end of input: the trailing separator opens one more, empty field
+      if (i < n) continue;
+      if (row.length < MAX_COLS) row.push('');
+    }
     if (src[i] === '\r') i++;
     if (src[i] === '\n') i++;
     cols = Math.max(cols, row.length);

@@ -38,3 +38,10 @@ test('row and column limits', () => {
   assert.equal(wide.cols, MAX_COLS);
   assert.equal(wide.cutCols, true);
 });
+
+test('last line ending with a separator and no newline keeps its row', () => {
+  const s = parseDelimited('a,b\n1,', ',');
+  assert.equal(s.rows, 2);
+  assert.deepEqual(s.text[1], ['1', '']);
+  assert.deepEqual(parseDelimited('a,b\n1,\n', ',').text[1], ['1', '']);
+});
