@@ -3,3 +3,8 @@ out/
 *.vsix
 CLAUDE.md
 /brag-output/
+.playwright-mcp/
+# Large memory-check fixtures: regenerate with the scripts in test/assets/
+test/assets/big.*
+.test-out/
+.claude/

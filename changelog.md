@@ -1,3 +1,31 @@
+# 2026-11-14 — v3.0.0: build setup and file viewers
+
+## Changes
+
+- `package.json` — `engines.vscode` ^1.90 (PDF.js needs Chromium 119+); esbuild build (`npm run build` = typecheck + bundle), `npm test`, `vsce package --no-dependencies`; viewer custom editors (`darkmark.sheet`, `darkmark.csv`, `darkmark.docx`, `darkmark.pdf`, `darkmark.image`); SheetJS, mammoth, pdfjs-dist, jszip
+- `src/extension.ts` — registers the viewers (no `retainContextWhenHidden`, find widget on)
+- `src/markdownEngine.ts` — renders through the shared shell; KaTeX CSS from `out/katex/`
+- `media/preview.css` — design tokens moved to `media/tokens.css`
+- `tsconfig.json` — typecheck only (`noEmit`); webview code checked by `tsconfig.webview.json`
+- `.vscodeignore` — ships `out/` and `media/` only
+- `.github/workflows/ci.yml`, `release.yml` — Node 22, build + test, `--no-dependencies`, vsix content check
+- `docs/PLAN-v3.md` — measured memory budget
+
+## New Files
+
+- `build.mjs` — bundles `out/extension.js` and `out/webview/*.js`, copies KaTeX and PDF.js runtime files
+- `src/webviewShell.ts` — shared HTML/CSP template with a per-render nonce; strict viewer CSP
+- `src/viewers/BinaryViewerProvider.ts` — one read-only custom editor for all viewers; the webview fetches the file by URL
+- `src/webview/common.ts` — shared webview helpers (state, toolbar, reload on change)
+- `src/webview/sheet.ts`, `docx.ts`, `pdf.ts`, `image.ts` (+ `.css`) — the viewers
+- `src/webview/lib/csv.ts` — RFC 4180 parser for CSV/TSV
+- `media/tokens.css`, `media/viewer.css` — shared styles
+- `tsconfig.webview.json`
+- `test/build.test.mjs`, `test/csv.test.mjs`, `test/harness.html`
+- `test/assets/sample.{xlsx,csv,docx,pdf,png,svg}` and generator scripts for the large memory-check files
+
+---
+
 # 2026-10-03 — v2.0.0: media, math, diagrams, auto-release
 
 ## Changes

@@ -11,9 +11,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx vsce package
-      # Runtime deps must ship: a .vscodeignore glob once dropped markdown-it-katex
-      - run: unzip -l *.vsix | grep -q 'node_modules/@vscode/markdown-it-katex/'
+      - run: npm run build
+      - run: npm test
+      - run: npx vsce package --no-dependencies
+      # Everything is bundled: the vsix must carry the bundles and the files loaded by URL
+      - name: Check vsix contents
+        run: |
+          unzip -l *.vsix > contents.txt
+          for f in extension/out/extension.js extension/out/webview/ extension/out/katex/katex.min.css \
+                   extension/out/pdfjs/pdf.worker.min.mjs extension/media/tokens.css; do
+            grep -q "$f" contents.txt || { echo "missing from vsix: $f"; exit 1; }
+          done
+          if grep -q 'extension/node_modules/' contents.txt; then echo "node_modules must not ship"; exit 1; fi

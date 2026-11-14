@@ -2,7 +2,7 @@
 
 ![darkmark logo](media/logo.png)
 
-A VS Code extension that opens `.md` files as a rendered dark-themed preview instead of raw text.
+A VS Code and VSCodium extension that opens Markdown, spreadsheets, Word documents, PDFs and images in dark-themed viewers.
 
 [![darkmark v2 demo](media/demo.gif)](media/demo.mp4)
 
@@ -23,6 +23,41 @@ A VS Code extension that opens `.md` files as a rendered dark-themed preview ins
 - "Edit Source" button to switch back to raw text at any time
 
 > **Video formats:** VS Code ships without proprietary codecs, so H.264 `.mp4` files may not play. Use `.webm` for reliable playback.
+
+## Viewers
+
+| File types | Opens by default? | What you get |
+|---|---|---|
+| `.xlsx` `.xls` `.ods` | yes | Sheet tabs, sticky column letters and row numbers, number/date/boolean styling |
+| `.csv` `.tsv` | no: right-click → **Open With…** → *darkmark Sheet* | The same grid, with quoted fields and embedded newlines handled |
+| `.docx` | yes | The document converted to HTML in the dark theme, with images, tables and working links |
+| `.pdf` | yes | Pages, zoom, fit width, page navigation, search, selectable text |
+| `.png` `.jpg` `.gif` `.webp` `.svg` `.bmp` `.ico` `.avif` | no: **Open With…** → *darkmark Image* | Fit / 1:1, wheel zoom around the cursor, drag to pan, checkerboard behind transparency, size info |
+
+Every viewer has an **Open with default editor** button, and VS Code's find widget (<kbd>Ctrl</kbd>+<kbd>F</kbd>) works in all of them.
+
+To turn a viewer off, or make one the default, use VS Code's own setting:
+
+```json
+"workbench.editorAssociations": {
+  "*.pdf": "default",
+  "*.csv": "darkmark.csv"
+}
+```
+
+View types: `darkmark.preview` (Markdown), `darkmark.sheet`, `darkmark.csv`, `darkmark.docx`, `darkmark.pdf`, `darkmark.image`.
+
+### Light on memory
+
+- Files are never copied into the extension: the viewer streams them straight from disk.
+- Viewers render only what is on screen: PDF pages near the viewport, sheet rows in view.
+- A viewer tab you switch away from frees its memory and comes back at the same page, zoom and scroll.
+
+### Limits
+
+- Sheets show the first 50,000 rows and 1,000 columns.
+- Password-protected PDFs aren't supported yet.
+- Video and audio files use VS Code's built-in preview.
 
 ## Installation
 
@@ -48,8 +83,14 @@ To edit the raw markdown, click the **Edit Source** button in the bottom-right c
 
 ```bash
 npm install
-npm run package
+npm run build      # typecheck + esbuild bundles into out/
+npm test
+npm run package    # vsce package --no-dependencies
 ```
+
+Everything the extension needs at runtime is bundled into `out/`; `node_modules` is not shipped.
+
+To try a viewer bundle in a normal browser, run `python3 -m http.server 8123` from the repo root and open `http://localhost:8123/test/harness.html?viewer=pdf&file=test/assets/sample.pdf`. The large memory-check files (`test/assets/big.*`) aren't committed; generate them with the scripts in `test/assets/`.
 
 ## Releases
 
@@ -67,6 +108,10 @@ If you protect `main`, let `github-actions[bot]` push to it, or the bump commit 
 - [highlight.js](https://highlightjs.org/) — syntax highlighting
 - [KaTeX](https://katex.org/) via [@vscode/markdown-it-katex](https://github.com/microsoft/vscode-markdown-it-katex) — math
 - [Mermaid](https://mermaid.js.org/) — diagrams
+- [SheetJS](https://sheetjs.com/) — xlsx, xls and ods
+- [mammoth](https://github.com/mwilliamson/mammoth.js) — docx to HTML
+- [PDF.js](https://mozilla.github.io/pdf.js/) — PDF rendering
+- [esbuild](https://esbuild.github.io/) — bundling
 - VS Code `CustomReadonlyEditorProvider` API
 
 ## License

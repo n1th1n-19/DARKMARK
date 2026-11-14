@@ -1,0 +1,21 @@
+id,name,city,amount,date
+1,"Customer 1, Ltd",Berlin,12.50,2024-02-15
+2,"Customer 2, Ltd","Paris, FR",25.00,2024-03-15
+3,"Customer 3, Ltd",Berlin,37.50,2024-04-15
+4,"Customer 4, Ltd","Paris, FR",50.00,2024-05-15
+5,"Customer 5, Ltd",Berlin,62.50,2024-06-15
+6,"Customer 6, Ltd","Paris, FR",75.00,2024-07-15
+7,"Customer 7, Ltd",Berlin,87.50,2024-08-15
+8,"Customer 8, Ltd","Paris, FR",100.00,2024-09-15
+9,"Customer 9, Ltd",Berlin,112.50,2024-10-15
+10,"Customer 10, Ltd","Paris, FR",125.00,2024-11-15
+11,"Customer 11, Ltd",Berlin,137.50,2024-12-15
+12,"Customer 12, Ltd","Paris, FR",150.00,2024-01-15
+13,"Customer 13, Ltd",Berlin,162.50,2024-02-15
+14,"Customer 14, Ltd","Paris, FR",175.00,2024-03-15
+15,"Customer 15, Ltd",Berlin,187.50,2024-04-15
+16,"Customer 16, Ltd","Paris, FR",200.00,2024-05-15
+17,"Customer 17, Ltd",Berlin,212.50,2024-06-15
+18,"Customer 18, Ltd","Paris, FR",225.00,2024-07-15
+19,"Customer 19, Ltd",Berlin,237.50,2024-08-15
+20,"Customer 20, Ltd","Paris, FR",250.00,2024-09-15
