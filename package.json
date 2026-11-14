@@ -2,7 +2,7 @@
   "name": "darkmark",
   "displayName": "darkmark",
   "publisher": "n1th1n-19",
-  "description": "Dark-themed viewers for Markdown, spreadsheets, Word, PDF and images in VS Code and VSCodium",
+  "description": "Dark-themed viewers for Markdown, spreadsheets, Word, PowerPoint, PDF and images in VS Code and VSCodium",
   "version": "3.0.0",
   "engines": {
     "vscode": "^1.90.0"
