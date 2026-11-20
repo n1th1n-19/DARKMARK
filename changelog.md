@@ -1,3 +1,20 @@
+# 2026-11-20 — v3.3.0: GitHub tab through gh
+
+## Changes
+
+- `src/git/runner.ts` — process handling moved into an exported `spawnStream` shared by git and gh
+- `src/git/protocol.ts` — GitHub request and result types (`GhApi`)
+- `src/git/index.ts` — the panel serves the GitHub requests and kills gh children on close
+- `src/webview/git.ts`, `git.css` — GitHub tab (pull requests, issues, Actions) and PR numbers in the graph
+- `README.md`, `RELEASE_NOTES.md`, `docs/PLAN-v3.md`
+
+## New Files
+
+- `src/github/gh.ts` — runs `gh` with `GH_PROMPT_DISABLED=1`, no pager or color, `--json` output and `--limit` on every list; sign-in check through `gh api user`
+- `src/github/handlers.ts` — pull requests, checks, streamed diff (512 KB / 5,000-line cap), reviews, merge, create, issues, workflow runs, failed-step log (last 2,000 lines), rerun; Markdown rendered with markdown-it and `html: false`
+
+---
+
 # 2026-11-20 — v3.2.0: interactive Git client
 
 ## Changes

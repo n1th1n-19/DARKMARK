@@ -59,6 +59,17 @@ Open the Git panel with **darkmark Git** in the status bar, or **darkmark: Git**
 - **Conflicts**: a banner lists the conflicted files, opens them in the merge editor, and offers Continue and Abort.
 - **File History** and **Blame**: right-click a file in the explorer or its editor tab.
 
+### GitHub
+
+The **GitHub** tab works through the [GitHub CLI](https://cli.github.com) (`gh`), so darkmark never handles a token. If `gh` is missing or logged out, the tab shows what to run (`gh auth login`).
+
+- **Pull requests**: open, mine or review requested. A pull request shows its description, checks, comments and diff. Comment, review (approve, request changes, comment), check out, close, or merge (merge commit, squash or rebase, optionally deleting the branch). **New pull request…** creates one from the current branch, as a draft if you like.
+- **Issues**: filter by state or GitHub search, view, comment, create, close and reopen.
+- **Actions**: workflow runs for the current branch, the last 2,000 lines of a failed run's log, and rerun.
+- In the graph, commits that are the head of a pull request show its number; click it to open the pull request.
+
+Descriptions and comments are rendered as Markdown with raw HTML turned off, and links open in your browser.
+
 git never waits for a terminal: credential prompts fail with a message instead of hanging (SSH keys and credential helpers still work), and rebases and merges get their messages from the panel.
 
 ### Light on memory

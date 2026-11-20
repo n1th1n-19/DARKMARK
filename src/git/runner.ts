@@ -90,51 +90,60 @@ export class Git {
       env.GIT_EDITOR = ':';
     }
 
-    return new Promise<void>((resolve, reject) => {
-      const child = spawn('git', args, { cwd: this.root, env, windowsHide: true });
-      this.children.add(child);
-      // tail: end of stdout, for the error message when git reports there (merge prints CONFLICT to stdout)
-      let err = '', tail = '', bytes = 0, stopped = false;
-      const cleanup = () => {
-        clearTimeout(timer);
-        this.children.delete(child);
-        if (tmp) rmSync(tmp, { recursive: true, force: true });
-      };
-      const stop = (e?: Error) => {
-        if (stopped) return;
-        stopped = true;
-        child.kill();
-        cleanup();
-        e ? reject(e) : resolve();
-      };
-      const timer = setTimeout(() => stop(new GitError(`git ${args[0]} timed out`)),
-        o.network ? NETWORK_TIMEOUT : LOCAL_TIMEOUT);
-
-      child.stdout.setEncoding('utf8');
-      child.stdout.on('data', (chunk: string) => {
-        if (stopped) return;
-        bytes += Buffer.byteLength(chunk);
-        if (o.maxBytes && bytes > o.maxBytes) return stop(new TooLarge());
-        tail = (tail + chunk).slice(-2000);
-        if (onData(chunk) === false) stop();
-      });
-      child.stderr.setEncoding('utf8');
-      child.stderr.on('data', (chunk: string) => { if (err.length < 64_000) err += chunk; });
-      child.on('error', (e) => stop(new GitError(`Could not run git: ${e.message}`)));
-      child.on('close', (code) => {
-        if (stopped) return;
-        stopped = true;
-        cleanup();
-        if (code === 0 || (code !== null && o.okCodes?.includes(code))) resolve();
-        else reject(new GitError(err.trim() || tail.trim() || `git ${args[0]} failed (exit ${code})`, code));
-      });
-      if (o.input !== undefined) child.stdin.end(o.input);
-      else child.stdin.end();
-    });
+    return spawnStream('git', args, this.root, env, onData, o, this.children)
+      .finally(() => { if (tmp) rmSync(tmp, { recursive: true, force: true }); });
   }
 
   dispose(): void {
     for (const c of this.children) c.kill();
     this.children.clear();
   }
+}
+
+/**
+ * Spawn `bin` with an argument array (never a shell) and hand stdout to `onData` as it arrives.
+ * Return false from onData to stop early. Timeout, size cap and error text per RunOptions.
+ */
+export function spawnStream(bin: string, args: string[], cwd: string, env: NodeJS.ProcessEnv,
+  onData: (chunk: string) => void | false, o: RunOptions, children: Set<ChildProcess>): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(bin, args, { cwd, env, windowsHide: true });
+    children.add(child);
+    // tail: end of stdout, for the error message when git reports there (merge prints CONFLICT to stdout)
+    let err = '', tail = '', bytes = 0, stopped = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      children.delete(child);
+    };
+    const stop = (e?: Error) => {
+      if (stopped) return;
+      stopped = true;
+      child.kill();
+      cleanup();
+      e ? reject(e) : resolve();
+    };
+    const timer = setTimeout(() => stop(new GitError(`${bin} ${args[0]} timed out`)),
+      o.network ? NETWORK_TIMEOUT : LOCAL_TIMEOUT);
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      if (stopped) return;
+      bytes += Buffer.byteLength(chunk);
+      if (o.maxBytes && bytes > o.maxBytes) return stop(new TooLarge());
+      tail = (tail + chunk).slice(-2000);
+      if (onData(chunk) === false) stop();
+    });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => { if (err.length < 64_000) err += chunk; });
+    child.on('error', (e) => stop(new GitError(`Could not run ${bin}: ${e.message}`)));
+    child.on('close', (code) => {
+      if (stopped) return;
+      stopped = true;
+      cleanup();
+      if (code === 0 || (code !== null && o.okCodes?.includes(code))) resolve();
+      else reject(new GitError(err.trim() || tail.trim() || `${bin} ${args[0]} failed (exit ${code})`, code));
+    });
+    if (o.input !== undefined) child.stdin.end(o.input);
+    else child.stdin.end();
+  });
 }

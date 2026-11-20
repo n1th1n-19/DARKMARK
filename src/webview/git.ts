@@ -17,15 +17,20 @@ const ROW_H = 24;
 const LANE_W = 14;
 const MAX_LANES = 24;
 
-type ViewName = 'graph' | 'changes' | 'history' | 'blame';
+type ViewName = 'graph' | 'changes' | 'history' | 'blame' | 'github';
+type GhSection = 'prs' | 'issues' | 'actions';
 interface UiState {
   view: ViewName;
   path?: string;
   search: { kind: SearchKind; q: string };
   selected?: string;
   top: number;
+  gh: { section: GhSection; prFilter: 'open' | 'mine' | 'review'; issueState: 'open' | 'closed' | 'all'; issueSearch: string; open?: number };
 }
-const state = getState<UiState>({ view: 'graph', search: { kind: 'message', q: '' }, top: 0 });
+const state = getState<UiState>({
+  view: 'graph', search: { kind: 'message', q: '' }, top: 0,
+  gh: { section: 'prs', prFilter: 'open', issueState: 'open', issueSearch: '' },
+});
 const save = () => setState(state);
 
 // ── Requests ──────────────────────────────────────────────────────────
@@ -42,6 +47,8 @@ function call<M extends Method>(method: M, params: Api[M][0]): Promise<Api[M][1]
 /** Run an action: show progress, report errors, refresh afterwards */
 async function act<M extends Method>(label: string, method: M, params: Api[M][0]): Promise<boolean> {
   busy.textContent = `${label}…`;
+  // Fetch, pull and push can change which commits are PR heads
+  if (method === 'fetch' || method === 'pull' || method === 'push') prHeads = null;
   try {
     await call(method, params);
     return true;
@@ -80,12 +87,13 @@ const tabs: Record<ViewName, HTMLButtonElement> = {
   changes: btn('Changes', 'Working tree, commit and stashes', () => setView('changes')),
   history: btn('File History', 'History of one file', () => setView('history')),
   blame: btn('Blame', 'Who changed each line', () => setView('blame')),
+  github: btn('GitHub', 'Pull requests, issues and Actions (through gh)', () => setView('github')),
 };
 const branchBtn = btn('', 'Switch branch', (e) => branchMenu(e));
 const syncInfo = h('span', { className: 'dm-info' });
 const busy = h('span', { className: 'dm-info g-busy' });
 const toolbar = h('div', { className: 'dm-toolbar' },
-  tabs.graph, tabs.changes, tabs.history, tabs.blame,
+  tabs.graph, tabs.changes, tabs.github, tabs.history, tabs.blame,
   h('span', { className: 'g-sep' }),
   branchBtn, syncInfo,
   btn('Fetch', 'git fetch --all --prune', () => act('Fetch', 'fetch', {})),
@@ -252,7 +260,7 @@ function setView(view: ViewName) {
   for (const [k, b] of Object.entries(tabs)) b.setAttribute('aria-pressed', String(k === view));
   tabs.history.hidden = tabs.blame.hidden = !state.path;
   current?.dispose?.();
-  current = view === 'changes' ? changesView() : view === 'blame' ? blameView(state.path!) : logView(view === 'history' ? state.path : undefined);
+  current = view === 'github' ? githubView() : view === 'changes' ? changesView() : view === 'blame' ? blameView(state.path!) : logView(view === 'history' ? state.path : undefined);
   current.refresh();
 }
 
@@ -309,7 +317,27 @@ function refBadges(c: Commit): HTMLElement[] {
     const head = r.startsWith('HEAD');
     const name = r.replace(/^tag: /, '').replace(/^HEAD -> /, '');
     return h('span', { className: `g-ref${tag ? ' g-tag' : ''}${head ? ' g-head' : ''}`, title: r }, name);
-  });
+  }).concat(prHeads?.[c.hash] ? [h('button', {
+    className: 'g-ref g-pr', title: 'Open this pull request in the GitHub tab',
+    onclick: (e: MouseEvent) => { e.stopPropagation(); state.gh.section = 'prs'; state.gh.open = prHeads![c.hash]; setView('github'); },
+  }, `#${prHeads[c.hash]}`)] : []);
+}
+
+// PR head commits for the graph: fetched once per panel session, again after fetch, pull or push
+let prHeads: Record<string, number> | null = null;
+let prHeadsLoading = false;
+async function loadPrHeads(after: () => void) {
+  if (prHeads || prHeadsLoading) return;
+  prHeadsLoading = true;
+  try {
+    const s = await call('ghState', {});
+    prHeads = s.ok ? await call('prHeads', {}) : {};
+    after();
+  } catch {
+    prHeads = {}; // no gh, no network or not a GitHub repo: the graph just has no PR numbers
+  } finally {
+    prHeadsLoading = false;
+  }
 }
 
 function logView(file?: string) {
@@ -376,6 +404,7 @@ function logView(file?: string) {
     }
     commits = got; rows = isGraph ? gotRows : null; offset = 0; more = m;
     measure();
+    if (!file) loadPrHeads(render);
     if (!commits.length) message(rowsBox, file ? 'No history for this file.' : state.search.q ? 'No commits match.' : 'No commits yet.');
     list.scrollTop = top;
     render();
@@ -842,6 +871,250 @@ function blameView(file: string) {
       }
     },
   };
+}
+
+// ── GitHub (through gh) ───────────────────────────────────────────────
+
+const iso = (s: string) => (s ? dateFmt.format(new Date(s)) : '');
+
+/** Markdown that gh returned, rendered on the host with raw HTML escaped */
+function mdBlock(html: string): HTMLElement {
+  const el = h('div', { className: 'g-md' });
+  el.innerHTML = html || '<p class="dm-info">No description.</p>';
+  return el;
+}
+
+function commentList(cs: { author: string; createdAt: string; bodyHtml: string }[]): HTMLElement[] {
+  return cs.map((c) => h('div', { className: 'g-comment' },
+    h('div', { className: 'dm-info' }, `${c.author} · ${iso(c.createdAt)}`), mdBlock(c.bodyHtml)));
+}
+
+function commentBox(label: string, send: (body: string) => Promise<boolean>): HTMLElement {
+  const ta = h('textarea', { className: 'g-field', rows: 3, placeholder: `${label} (Markdown)` });
+  return h('div', { className: 'g-commit' }, ta, h('div', { className: 'g-commit-row' }, h('span', { className: 'dm-spacer' }),
+    btn(label, label, async () => { if (await send(ta.value)) ta.value = ''; }, 'g-primary')));
+}
+
+const bucketClass = (b: string) => (b === 'pass' ? 'g-ok' : b === 'fail' || b === 'cancel' ? 'g-bad' : 'g-wait');
+
+function githubView() {
+  const head = h('div', { className: 'g-search' });
+  const main = h('div', { className: 'dm-view g-gh' });
+  body.replaceChildren(head, main);
+  let gen = 0;
+  // Links in GitHub text open in the browser; the webview never navigates
+  main.addEventListener('click', (e) => {
+    const a = (e.target as HTMLElement).closest('.g-md a') as HTMLAnchorElement | null;
+    if (!a) return;
+    e.preventDefault();
+    const href = a.getAttribute('href') ?? '';
+    if (/^(https?|mailto):/i.test(href)) call('openUrl', { url: href });
+  });
+
+  const tab = (s: GhSection, label: string) => {
+    const b = btn(label, label, () => { state.gh.section = s; state.gh.open = undefined; save(); load(); });
+    b.setAttribute('aria-pressed', String(state.gh.section === s));
+    return b;
+  };
+  const open = (num?: number) => { state.gh.open = num; save(); load(); };
+  const ghAct = async <M extends Method>(label: string, method: M, params: Api[M][0]) => {
+    const ok = await act(label, method, params);
+    if (ok) load();
+    return ok;
+  };
+
+  async function load() {
+    const g = ++gen;
+    head.replaceChildren(tab('prs', 'Pull requests'), tab('issues', 'Issues'), tab('actions', 'Actions'));
+    message(main, 'Loading…');
+    try {
+      const s = await call('ghState', {});
+      if (g !== gen) return;
+      if (!s.ok) {
+        const cmd = s.reason === 'missing' ? 'https://cli.github.com' : 'gh auth login';
+        main.replaceChildren(h('div', { className: 'dm-message' }, h('p', {}, s.message),
+          h('p', {}, h('code', { className: 'g-mono' }, cmd), ' ',
+            btn('Copy', 'Copy to the clipboard', () => call('copy', { text: cmd })), ' ', btn('Retry', 'Check again', () => load()))));
+        return;
+      }
+      head.append(h('span', { className: 'dm-info' }, `Signed in to gh as ${s.user}`));
+      const view = state.gh.section === 'prs' ? (state.gh.open ? prDetail(state.gh.open) : prList())
+        : state.gh.section === 'issues' ? (state.gh.open ? issueDetail(state.gh.open) : issueList())
+        : runList();
+      const els = await view;
+      if (g === gen) main.replaceChildren(...els);
+    } catch (e) {
+      if (g === gen) message(main, (e as Error).message, true);
+    }
+  }
+
+  const back = (label: string) => btn(`← ${label}`, label, () => open(undefined));
+  const row = (title: string, meta: string, onclick: () => void, extra: (Node | string)[] = []) =>
+    h('button', { className: 'g-gh-row', onclick }, h('span', { className: 'g-gh-title' }, title, ...extra), h('span', { className: 'dm-info' }, meta));
+
+  async function prList(): Promise<Node[]> {
+    const filter = h('select', { className: 'dm-btn', title: 'Which pull requests',
+      onchange: () => { state.gh.prFilter = filter.value as UiState['gh']['prFilter']; save(); load(); } },
+    ...([['open', 'Open'], ['mine', 'Mine'], ['review', 'Review requested']] as const).map(([v, t]) => h('option', { value: v, selected: state.gh.prFilter === v }, t)));
+    head.append(filter, btn('New pull request…', 'Create a pull request from the current branch', () => newPr()));
+    const prs = await call('prList', { filter: state.gh.prFilter });
+    if (!prs.length) return [h('div', { className: 'dm-message' }, 'No pull requests here.')];
+    return prs.map((p) => row(`#${p.number} ${p.title}`,
+      `${p.author} · ${p.headRefName} → ${p.baseRefName} · ${iso(p.updatedAt)}`, () => open(p.number),
+      p.isDraft ? [h('span', { className: 'g-ref' }, 'draft')] : []));
+  }
+
+  async function newPr() {
+    const [base, last] = await Promise.all([call('defaultBase', {}).catch(() => ''), call('lastMessage', {}).catch(() => '')]);
+    const v = await form(`New pull request from ${overview?.status.branch ?? 'HEAD'}`, [
+      { key: 'title', label: 'Title', value: last.split('\n')[0] },
+      { key: 'body', label: 'Description (Markdown)', kind: 'textarea' },
+      { key: 'base', label: 'Base branch', value: base },
+      { key: 'labels', label: 'Labels (comma-separated)' },
+      { key: 'draft', label: 'Draft', kind: 'check' },
+    ], 'Create');
+    if (!v) return;
+    busy.textContent = 'Creating pull request…';
+    try {
+      const url = await call('prCreate', { title: String(v.title), body: String(v.body), base: String(v.base),
+        draft: !!v.draft, labels: String(v.labels).split(',') });
+      const num = Number(/\/pull\/(\d+)/.exec(url)?.[1]);
+      prHeads = null;
+      open(num || undefined);
+    } catch (e) {
+      showError(`Create pull request failed: ${(e as Error).message}`);
+    } finally {
+      busy.textContent = '';
+    }
+  }
+
+  async function prDetail(num: number): Promise<Node[]> {
+    const [p, checks] = await Promise.all([call('prView', { number: num }), call('prChecks', { number: num }).catch(() => [])]);
+    const diffBox = h('div', {});
+    const showDiff = btn(`Show diff (${p.changedFiles} file${p.changedFiles === 1 ? '' : 's'}, +${p.additions} −${p.deletions})`, 'gh pr diff', async () => {
+      message(diffBox, 'Loading…');
+      try {
+        const d = await call('prDiff', { number: num });
+        if (d.kind === 'large') {
+          diffBox.replaceChildren(h('div', { className: 'g-diff-note' }, 'Diff too large — ', h('button', { className: 'g-link', onclick: () => call('openUrl', { url: `${p.url}/files` }) }, 'open it on GitHub')));
+          return;
+        }
+        diffBox.replaceChildren(...d.files.map((f) => {
+          const name = /^diff --git a\/(.*) b\/(.*)$/.exec(f.header[0])?.[2] ?? f.header[0];
+          const box = h('div', { className: 'g-diff' });
+          renderDiff(box, { kind: f.binary ? 'binary' : 'diff', file: f } as DiffResult, () => call('openUrl', { url: `${p.url}/files` }), []);
+          return h('div', { className: 'g-file' }, h('div', { className: 'g-file-head g-mono' }, name), box);
+        }));
+      } catch (e) {
+        message(diffBox, (e as Error).message, true);
+      }
+    });
+    const review = (e: MouseEvent) => menu(e, ([['approve', 'Approve'], ['request-changes', 'Request changes'], ['comment', 'Comment']] as const).map(([action, label]) => ({
+      label, run: async () => {
+        const v = await form(`${label}: #${num}`, [{ key: 'body', label: action === 'approve' ? 'Comment (optional)' : 'Comment', kind: 'textarea' }], label);
+        if (v) ghAct('Review', 'prReview', { number: num, action, body: String(v.body) });
+      },
+    })));
+    const merge = (e: MouseEvent) => menu(e, (['merge', 'squash', 'rebase'] as const).map((method) => ({
+      label: { merge: 'Create a merge commit', squash: 'Squash and merge', rebase: 'Rebase and merge' }[method],
+      run: async () => {
+        const v = await form(`Merge #${num} (${method})?`, [{ key: 'del', label: `Delete the ${p.headRefName} branch afterwards`, kind: 'check', value: true }], 'Merge');
+        if (v) ghAct('Merge pull request', 'prMerge', { number: num, method, deleteBranch: !!v.del });
+      },
+    })));
+    const open_ = p.state === 'OPEN';
+    return [
+      h('div', { className: 'g-gh-bar' }, back('All pull requests'), h('span', { className: 'dm-spacer' }),
+        btn('Checkout', 'gh pr checkout', () => act('Checkout', 'prCheckout', { number: num })),
+        ...(open_ ? [
+          btn('Close', 'gh pr close', async () => {
+            if (await confirmBox(`Close #${num}?`, 'Closes the pull request without merging. It can be reopened on GitHub.', 'Close', true)) ghAct('Close pull request', 'prClose', { number: num });
+          }),
+          btn('Review ▾', 'Approve, request changes or comment', review), btn('Merge ▾', 'Merge this pull request', merge, 'g-primary')] : []),
+        btn('Open on GitHub', p.url, () => call('openUrl', { url: p.url }))),
+      h('h2', { className: 'g-gh-h' }, `#${p.number} ${p.title}`),
+      h('div', { className: 'dm-info' }, `${p.state.toLowerCase()}${p.isDraft ? ' draft' : ''} · ${p.author} ${p.state === 'MERGED' ? 'merged' : 'wants to merge'} ${p.headRefName} into ${p.baseRefName}`
+        + `${p.reviewDecision ? ` · ${p.reviewDecision.toLowerCase().replace(/_/g, ' ')}` : ''}${p.mergeable === 'CONFLICTING' ? ' · has conflicts' : ''}`),
+      mdBlock(p.bodyHtml),
+      h('h3', { className: 'g-section-head' }, h('span', {}, `Checks (${checks.length})`)),
+      ...(checks.length ? checks.map((c) => h('div', { className: 'g-file-head' },
+        h('span', { className: `g-check-state ${bucketClass(c.bucket)}` }, c.bucket || c.state.toLowerCase()),
+        h('span', { className: 'g-subject' }, `${c.workflow ? `${c.workflow} / ` : ''}${c.name}`),
+        ...(c.link ? [btn('Details', c.link, () => call('openUrl', { url: c.link }), 'g-small')] : [])))
+        : [h('div', { className: 'dm-info' }, 'No checks reported.')]),
+      h('h3', { className: 'g-section-head' }, h('span', {}, 'Files')), showDiff, diffBox,
+      h('h3', { className: 'g-section-head' }, h('span', {}, `Comments (${p.comments.length})`)),
+      ...commentList(p.comments),
+      commentBox('Comment', (b) => ghAct('Comment', 'prComment', { number: num, body: b })),
+    ];
+  }
+
+  async function issueList(): Promise<Node[]> {
+    const st = h('select', { className: 'dm-btn', title: 'State',
+      onchange: () => { state.gh.issueState = st.value as UiState['gh']['issueState']; save(); load(); } },
+    ...(['open', 'closed', 'all'] as const).map((v) => h('option', { value: v, selected: state.gh.issueState === v }, v)));
+    const q = h('input', { className: 'dm-input g-q', type: 'search', placeholder: 'Filter (GitHub search syntax, Enter)', value: state.gh.issueSearch });
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { state.gh.issueSearch = q.value; save(); load(); } });
+    head.append(st, q, btn('New issue…', 'Create an issue', async () => {
+      const v = await form('New issue', [{ key: 'title', label: 'Title' }, { key: 'body', label: 'Description (Markdown)', kind: 'textarea' },
+        { key: 'labels', label: 'Labels (comma-separated)' }], 'Create');
+      if (!v) return;
+      try {
+        const url = await call('issueCreate', { title: String(v.title), body: String(v.body), labels: String(v.labels).split(',') });
+        open(Number(/\/issues\/(\d+)/.exec(url)?.[1]) || undefined);
+      } catch (e) {
+        showError(`Create issue failed: ${(e as Error).message}`);
+      }
+    }));
+    const issues = await call('issueList', { state: state.gh.issueState, search: state.gh.issueSearch });
+    if (!issues.length) return [h('div', { className: 'dm-message' }, 'No issues match.')];
+    return issues.map((i) => row(`#${i.number} ${i.title}`, `${i.state.toLowerCase()} · ${i.author} · ${iso(i.updatedAt)}`, () => open(i.number),
+      i.labels.map((l) => h('span', { className: 'g-ref' }, l.name))));
+  }
+
+  async function issueDetail(num: number): Promise<Node[]> {
+    const i = await call('issueView', { number: num });
+    const isOpen = i.state === 'OPEN';
+    return [
+      h('div', { className: 'g-gh-bar' }, back('All issues'), h('span', { className: 'dm-spacer' }),
+        btn(isOpen ? 'Close issue' : 'Reopen issue', isOpen ? 'gh issue close' : 'gh issue reopen',
+          () => ghAct(isOpen ? 'Close issue' : 'Reopen issue', 'issueSetState', { number: num, open: !isOpen })),
+        btn('Open on GitHub', i.url, () => call('openUrl', { url: i.url }))),
+      h('h2', { className: 'g-gh-h' }, `#${i.number} ${i.title}`),
+      h('div', { className: 'dm-info' }, `${i.state.toLowerCase()} · opened by ${i.author}`, ...i.labels.map((l) => h('span', { className: 'g-ref' }, l.name))),
+      mdBlock(i.bodyHtml),
+      h('h3', { className: 'g-section-head' }, h('span', {}, `Comments (${i.comments.length})`)),
+      ...commentList(i.comments),
+      commentBox('Comment', (b) => ghAct('Comment', 'issueComment', { number: num, body: b })),
+    ];
+  }
+
+  async function runList(): Promise<Node[]> {
+    head.append(h('span', { className: 'dm-info' }, `Workflow runs on ${overview?.status.branch ?? 'all branches'}`));
+    const runs = await call('runList', {});
+    if (!runs.length) return [h('div', { className: 'dm-message' }, 'No workflow runs for this branch.')];
+    return runs.map((r) => {
+      const failed = r.conclusion === 'failure';
+      const result = r.status === 'completed' ? r.conclusion || 'done' : r.status;
+      const log = h('pre', { className: 'g-log', hidden: true });
+      return h('div', { className: 'g-file' },
+        h('div', { className: 'g-file-head' },
+          h('span', { className: `g-check-state ${r.conclusion === 'success' ? 'g-ok' : failed ? 'g-bad' : 'g-wait'}` }, result),
+          h('span', { className: 'g-subject' }, `${r.workflowName}: ${r.displayTitle}`),
+          h('span', { className: 'dm-info' }, `${r.event} · ${iso(r.createdAt)}`),
+          ...(failed ? [btn('Failed log', 'gh run view --log-failed (last 2,000 lines)', async () => {
+            log.hidden = !log.hidden;
+            if (log.hidden) { log.textContent = ''; return; }
+            log.textContent = 'Loading…';
+            try { log.textContent = (await call('runLog', { id: r.databaseId })) || 'No failed-step log.'; } catch (e) { log.textContent = (e as Error).message; }
+          }, 'g-small'), btn('Rerun failed', 'gh run rerun --failed', () => ghAct('Rerun', 'runRerun', { id: r.databaseId, failedOnly: true }), 'g-small')] : []),
+          ...(r.status === 'completed' && !failed ? [btn('Rerun', 'gh run rerun', () => ghAct('Rerun', 'runRerun', { id: r.databaseId, failedOnly: false }), 'g-small')] : []),
+          btn('Open', r.url, () => call('openUrl', { url: r.url }), 'g-small')),
+        log);
+    });
+  }
+
+  return { refresh: load };
 }
 
 // ── Start ─────────────────────────────────────────────────────────────
