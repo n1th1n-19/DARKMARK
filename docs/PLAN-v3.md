@@ -1,6 +1,6 @@
 # darkmark v3 plan — file viewers, Git client, GitHub
 
-Status as of 2026-11-20. Phases 0, 1 and 1b are shipped and Phase 2 is in review; Phase 3 is next.
+Status as of 2026-11-20. Phases 0, 1, 1b and 2 are shipped; Phase 3 is in review.
 
 ## Goal
 

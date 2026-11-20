@@ -9,6 +9,8 @@ import { Git, GitError, TooLarge } from './runner';
 import { layout, type Lanes } from './graph';
 import { LOG_FORMAT, LogParser, type Commit } from './log';
 import type { Api, BlameLine, ChangedFile, DiffResult, Event, Method, Op, Overview, Ref, Request, Response } from './protocol';
+import { Gh } from '../github/gh';
+import { githubHandlers } from '../github/handlers';
 import { rebasePlan } from './rebase';
 import { parseStatus } from './status';
 
@@ -57,6 +59,8 @@ class GitPanel {
   private stale = false;
   private timer: NodeJS.Timeout | undefined;
   private emptyTree: Promise<string> | undefined;
+  // Declared before `handlers`, whose initializer reads it
+  private readonly gh = new Gh(this.git.root);
 
   constructor(private readonly context: vscode.ExtensionContext, readonly git: Git) {
     // No retainContextWhenHidden: a hidden panel frees its renderer and restores from setState
@@ -129,6 +133,7 @@ class GitPanel {
     if (panel === this) panel = undefined;
     clearTimeout(this.timer);
     this.git.dispose(); // kills any running git child
+    this.gh.dispose();
     this.disposables.forEach((d) => d.dispose());
     this.disposables.length = 0;
     this.panel.dispose();
@@ -201,6 +206,8 @@ class GitPanel {
   // ── requests ────────────────────────────────────────────────────────
 
   private readonly handlers: { [M in Method]: (p: Api[M][0]) => Promise<Api[M][1]> } = {
+    ...githubHandlers(this.gh, async () =>
+      parseStatus(await this.run(['status', '--porcelain=v2', '--branch', '-z'])).branch),
     overview: async () => {
       const [statusText, refsText, stashText, op] = await Promise.all([
         this.run(['status', '--porcelain=v2', '--branch', '-z']),

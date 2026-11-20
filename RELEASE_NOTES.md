@@ -1,5 +1,18 @@
 # Release Notes
 
+## v3.3.0
+
+### New: GitHub tab
+
+The Git panel has a **GitHub** tab, powered by the GitHub CLI (`gh`). darkmark never sees your token; if `gh` isn't installed or logged in, the tab tells you what to run.
+
+- **Pull requests**: list open, yours or review requested. Open one for its description, checks, comments and diff. Comment, review, check out, close, or merge (merge, squash or rebase), and create a pull request from the current branch, as a draft if you like.
+- **Issues**: filter, view, comment, create, close and reopen.
+- **Actions**: runs for the current branch, the failed steps' log, and rerun.
+- **Graph**: commits that head a pull request show its number.
+
+---
+
 ## v3.2.0
 
 ### New: Git client
