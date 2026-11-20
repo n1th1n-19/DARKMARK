@@ -1339,7 +1339,7 @@ function githubView() {
         }))) }, icon('caret'));
       mainBtn.disabled = conflict;
       caret.disabled = conflict;
-      action.replaceChildren(h('span', { className: 'g-split' }, mainBtn, caret),
+      action.replaceChildren(h('span', { className: 'g-splitbtn' }, mainBtn, caret),
         h('span', { className: 'g-muted' }, conflict ? 'Resolve the conflicts first.' : 'Merges on GitHub through gh.'));
     };
     const confirmStep = () => {
