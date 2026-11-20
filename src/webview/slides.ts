@@ -237,11 +237,11 @@ function fill(el: El | null, ctx: Ctx): string | null | undefined {
     if (c.localName === 'gradFill') {
       const stops = kids(at(c, 'gsLst'), 'gs')
         .map((gs) => [color(gs, ctx), num(gs.getAttribute('pos'), 0) / 1000] as const)
-        .filter(([col]) => col)
-        .map(([col, pos]) => `${col} ${pos}%`);
-      if (stops.length < 2) return stops.length ? stops[0].split(' ')[0] : undefined;
+        .filter(([col]) => col);
+      // One stop is a solid color (the rgba() itself contains spaces, so keep it whole)
+      if (stops.length < 2) return stops[0]?.[0];
       const ang = num(at(c, 'lin')?.getAttribute('ang'), 0) / 60000 + 90;
-      return `linear-gradient(${ang}deg, ${stops.join(', ')})`;
+      return `linear-gradient(${ang}deg, ${stops.map(([col, pos]) => `${col} ${pos}%`).join(', ')})`;
     }
   }
   return undefined;
@@ -629,7 +629,9 @@ function renderTable(tbl: El, part: Part, ctx: Ctx, xf: Xfrm, map: MapRect): HTM
         rowSpan: Math.max(1, num(tc.getAttribute('rowSpan'), 1)),
       });
       const tcPr = at(tc, 'tcPr');
-      const bg = fill(tcPr, ctx) ?? (!styled ? undefined
+      // fill() is null for an explicit noFill, which must win over the table style
+      const own = fill(tcPr, ctx);
+      const bg = own !== undefined ? own : (!styled ? undefined
         : header ? accent('') : band && (ri - (firstRow ? 1 : 0)) % 2 === 0 ? accent('<a:tint val="40000"/>') : accent('<a:tint val="20000"/>'));
       if (bg) td.style.background = bg;
       if (styled) td.style.borderColor = '#fff';
@@ -676,7 +678,7 @@ function renderTree(container: El | null, part: Part, ctx: Ctx, target: HTMLElem
         case 'cxnSp': {
           const xf = readXfrm(at(node, 'spPr', 'xfrm'));
           const ln = at(node, 'spPr', 'ln');
-          if (xf) {
+          if (xf && !at(ln, 'noFill')) {
             el = line(xf, map, color(at(ln, 'solidFill'), ctx) ?? styleRef(node, 'lnRef', ctx),
               Math.max(0.75, num(ln?.getAttribute('w'), 12700) / EMU),
               (at(ln, 'prstDash')?.getAttribute('val') ?? 'solid') !== 'solid');
