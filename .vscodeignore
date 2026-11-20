@@ -18,3 +18,4 @@ changelog.md
 .test-out/**
 .playwright-mcp/**
 .claude/**
+update.sh

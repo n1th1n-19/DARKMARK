@@ -73,6 +73,16 @@ View types: `darkmark.preview` (Markdown), `darkmark.sheet`, `darkmark.csv`, `da
 codium --install-extension darkmark-X.Y.Z.vsix
 ```
 
+### Updating
+
+One command updates darkmark to the latest release in every VS Code and VSCodium on your `PATH` (Linux and macOS):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/n1th1n-19/DARKMARK/main/update.sh | sh
+```
+
+From a clone of this repo, `sh update.sh` does the same. Reload open windows afterwards.
+
 > Upgrading from 2.0.0 (VS Code or VSCodium)? It installed as `undefined_publisher.darkmark`. Remove it first: `code --uninstall-extension undefined_publisher.darkmark` (or `codium …`).
 
 ## Usage
