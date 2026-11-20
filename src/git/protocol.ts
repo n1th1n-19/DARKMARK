@@ -12,7 +12,7 @@ export type RebaseAction = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop';
 
 export interface ChangedFile { path: string; orig?: string; added: number; deleted: number; binary: boolean }
 export interface Ref { name: string; kind: 'head' | 'remote' | 'tag'; hash: string; current: boolean; upstream: string }
-export interface Stash { index: number; subject: string }
+export interface Stash { index: number; hash: string; subject: string }
 export interface BlameLine { hash: string; author: string; time: number; summary: string; text: string }
 
 /** A diff the panel can show inline, or the reason it can't */
@@ -100,7 +100,8 @@ export interface Api extends GhApi {
   unstage: [{ paths: string[] }, void];
   discard: [{ paths: string[]; untracked: string[] }, void];
   /** Per hunk / per line: hunk is located by its header in a fresh diff, so a stale view fails safely */
-  stageLines: [{ path: string; staged: boolean; discard?: boolean; hunk: string; lines: number[] }, void];
+  /** lines: indexes into the hunk; texts: those lines as shown, checked against a fresh diff */
+  stageLines: [{ path: string; staged: boolean; discard?: boolean; hunk: string; lines: number[]; texts: string[] }, void];
   commit: [{ message: string; amend: boolean; signoff: boolean }, void];
   lastMessage: [{}, string];
   checkout: [{ ref: string }, void];
@@ -117,8 +118,9 @@ export interface Api extends GhApi {
   tagCreate: [{ name: string; at: string; message: string }, void];
   tagDelete: [{ name: string }, void];
   stashSave: [{ message: string; untracked: boolean }, void];
-  stashApply: [{ index: number; pop: boolean }, void];
-  stashDrop: [{ index: number }, void];
+  /** By commit hash: stash@{n} positions shift when another stash is pushed */
+  stashApply: [{ hash: string; pop: boolean }, void];
+  stashDrop: [{ hash: string }, void];
   fetch: [{}, void];
   pull: [{}, void];
   push: [{ force: boolean }, void];

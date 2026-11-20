@@ -1,3 +1,16 @@
+# 2026-11-20 — v3.4.1: fixes from the review of PR #6
+
+## Changes
+
+- `src/git/runner.ts` — `GIT_LITERAL_PATHSPECS=1` for every git call; stdin errors (EPIPE) handled
+- `src/git/diff.ts` — a standalone hunk's two start lines are normalized to the side git applies to
+- `src/git/index.ts` — `stageLines` checks the selected lines' text against a fresh diff; stashes resolved by commit hash; a deep log page rebuilds its graph lanes from `rev-list` after a refresh
+- `src/git/protocol.ts` — `stageLines.texts`, `Stash.hash`, stash requests by hash
+- `src/webview/git.ts`, `git.css` — dialogs submit on Enter only from text fields; refresh reloads the window in view; no paging during a reload or right after a failure; diff responses tied to their expansion; keyboard-selectable diff lines; Changes waits for the first status
+- `test/git-run.test.mjs`, `test/diff-parse.test.mjs` — literal paths, EPIPE, a hunk with duplicate context below it
+
+---
+
 # 2026-11-20 — v3.4.0: GitHub-style GitHub tab
 
 ## Changes

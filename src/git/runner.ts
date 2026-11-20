@@ -75,6 +75,7 @@ export class Git {
       GIT_ASKPASS: '', SSH_ASKPASS: '', // VS Code's own askpass needs its IPC; don't inherit it
       LC_ALL: 'C', // parsers expect untranslated output
       GIT_OPTIONAL_LOCKS: '0', // status/log must not fight the user's own git for index.lock
+      GIT_LITERAL_PATHSPECS: '1', // a file named "[id].tsx" must not also match "i.tsx"
     };
     if (o.messages || o.todo !== undefined) {
       tmp = mkdtempSync(path.join(tmpdir(), 'darkmark-git-'));
@@ -143,6 +144,8 @@ export function spawnStream(bin: string, args: string[], cwd: string, env: NodeJ
       if (code === 0 || (code !== null && o.okCodes?.includes(code))) resolve();
       else reject(new GitError(err.trim() || tail.trim() || `${bin} ${args[0]} failed (exit ${code})`, code));
     });
+    // git may exit before reading all its input (EPIPE); the exit code reports the real outcome
+    child.stdin.on('error', () => {});
     if (o.input !== undefined) child.stdin.end(o.input);
     else child.stdin.end();
   });

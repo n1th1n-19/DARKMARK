@@ -74,7 +74,15 @@ export function partialPatch(file: FileDiff, hunk: Hunk, selected: Set<number>, 
     if (kept[0] !== '-') newN++;
   });
   if (!changes) return null;
-  const header = `@@ -${hunk.oldStart},${oldN} +${hunk.newStart},${newN} @@`;
+  // A standalone hunk has no earlier hunks to shift it: both sides start where git will look
+  // (the old side forward, the new side in reverse). Keeping the other side's offset from the
+  // full diff makes git try that line first, and identical context there takes the change.
+  const at = reverse ? hunk.newStart : hunk.oldStart;
+  const [n0, n1] = reverse ? [newN, oldN] : [oldN, newN];
+  // A side with no lines names the line before the change, so the other side starts one later
+  const other = n0 === 0 ? at + 1 : n1 === 0 ? Math.max(0, at - 1) : at;
+  const [oldStart, newStart] = reverse ? [other, at] : [at, other];
+  const header = `@@ -${oldStart},${oldN} +${newStart},${newN} @@`;
   return [...fileHeader(file), header, ...out].join('\n') + '\n';
 }
 

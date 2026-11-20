@@ -410,3 +410,4 @@ details.g-merge-sec .g-box { margin-top: 12px; }
 .g-alert-caution { border-left-color: #f85149; } .g-alert-caution .g-alert-title { color: #f85149; }
 .g-md input[type='checkbox'] { margin: 0 6px 0 -18px; vertical-align: middle; }
 .g-md li:has(> input[type='checkbox']), .g-md li:has(> p > input[type='checkbox']) { list-style: none; }
+.g-pickable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
