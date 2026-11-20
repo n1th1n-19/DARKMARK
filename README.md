@@ -2,7 +2,7 @@
 
 ![darkmark logo](media/logo.png)
 
-A VS Code and VSCodium extension that opens Markdown, spreadsheets, Word documents, PDFs and images in dark-themed viewers.
+A VS Code and VSCodium extension that opens Markdown, spreadsheets, Word documents, PowerPoint decks, PDFs and images in dark-themed viewers, and adds an interactive Git client.
 
 [![darkmark v2 demo](media/demo.gif)](media/demo.mp4)
 
@@ -48,10 +48,23 @@ To turn a viewer off, or make one the default, use VS Code's own setting:
 
 View types: `darkmark.preview` (Markdown), `darkmark.sheet`, `darkmark.csv`, `darkmark.docx`, `darkmark.slides`, `darkmark.pdf`, `darkmark.image`.
 
+## Git
+
+Open the Git panel with **darkmark Git** in the status bar, or **darkmark: Git** in the Command Palette. It works on the repository of the active file.
+
+- **Graph**: every branch, with branch, tag and HEAD labels. Search by message, author, hash or path. Click a commit to see its message and changed files; expand a file for an inline diff, or open it in the diff editor.
+- **Changes**: stage and unstage whole files, single hunks or single lines (click lines to select them). Discard asks first. Commit with amend and sign-off. Stash, apply, pop and drop.
+- **Right-click a commit**: checkout, create a branch or tag, merge, rebase, cherry-pick, revert, reset (soft, mixed or hard), and **interactive rebase** (drag to reorder; pick, reword, squash, fixup or drop, with the messages written in the panel). Right-click a commit that has branch labels to rename, delete or merge those branches.
+- **Fetch, Pull, Push** in the toolbar. Push sets the upstream on the first push. Force push is only offered as `--force-with-lease`.
+- **Conflicts**: a banner lists the conflicted files, opens them in the merge editor, and offers Continue and Abort.
+- **File History** and **Blame**: right-click a file in the explorer or its editor tab.
+
+git never waits for a terminal: credential prompts fail with a message instead of hanging (SSH keys and credential helpers still work), and rebases and merges get their messages from the panel.
+
 ### Light on memory
 
 - Files are never copied into the extension: the viewer streams them straight from disk.
-- Viewers render only what is on screen: PDF pages near the viewport, sheet rows in view.
+- Viewers render only what is on screen: PDF pages near the viewport, sheet rows in view, Git graph rows in view.
 - A viewer tab you switch away from frees its memory and comes back at the same page, zoom and scroll.
 
 ### Limits
@@ -59,6 +72,8 @@ View types: `darkmark.preview` (Markdown), `darkmark.sheet`, `darkmark.csv`, `da
 - Sheets show the first 50,000 rows and 1,000 columns.
 - Slides are approximate: SmartArt, charts, video and embedded objects show as a labelled box, and animations and transitions are not played.
 - Password-protected PDFs aren't supported yet.
+- The Git graph loads 300 commits at a time and keeps at most 5,000 in memory; it fetches older or newer ones again as you scroll.
+- Diffs over 512 KB or 5,000 lines open in the diff editor instead of inline.
 - Video and audio files use VS Code's built-in preview.
 
 ## Installation
@@ -123,6 +138,7 @@ If you protect `main`, let `github-actions[bot]` push to it, or the bump commit 
 - [SheetJS](https://sheetjs.com/) — xlsx, xls and ods
 - [mammoth](https://github.com/mwilliamson/mammoth.js) — docx to HTML
 - [PDF.js](https://mozilla.github.io/pdf.js/) — PDF rendering
+- [git](https://git-scm.com/) — the Git panel runs your installed `git`
 - [esbuild](https://esbuild.github.io/) — bundling
 - VS Code `CustomReadonlyEditorProvider` API
 

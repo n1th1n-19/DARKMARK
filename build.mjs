@@ -11,6 +11,8 @@ rmSync('out', { recursive: true, force: true });
 // Node entries: the extension, plus lazily required bundles (src/git/index.ts -> out/git.js)
 const nodeEntries = { extension: 'src/extension.ts' };
 if (existsSync('src/git/index.ts')) nodeEntries.git = 'src/git/index.ts';
+// Runs as GIT_EDITOR / GIT_SEQUENCE_EDITOR under VS Code's runtime (see src/git/runner.ts)
+if (existsSync('src/git/editor.ts')) nodeEntries['git-editor'] = 'src/git/editor.ts';
 
 const configs = [
   {

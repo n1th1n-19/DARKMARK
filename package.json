@@ -2,7 +2,7 @@
   "name": "darkmark",
   "displayName": "darkmark",
   "publisher": "n1th1n-19",
-  "description": "Dark-themed viewers for Markdown, spreadsheets, Word, PowerPoint, PDF and images in VS Code and VSCodium",
+  "description": "Dark-themed viewers for Markdown, spreadsheets, Word, PowerPoint, PDF and images, plus an interactive Git client, in VS Code and VSCodium",
   "version": "3.1.1",
   "engines": {
     "vscode": "^1.90.0"
@@ -16,7 +16,9 @@
     "Other",
     "Visualization"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "customEditors": [
@@ -128,15 +130,66 @@
       {
         "command": "darkmark.openAsText",
         "title": "darkmark: Edit Source"
+      },
+      {
+        "command": "darkmark.git.open",
+        "title": "darkmark: Git",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "darkmark.git.fileHistory",
+        "title": "darkmark: File History"
+      },
+      {
+        "command": "darkmark.git.blame",
+        "title": "darkmark: Blame"
       }
-    ]
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "darkmark.git.fileHistory",
+          "when": "!explorerResourceIsFolder",
+          "group": "darkmark@1"
+        },
+        {
+          "command": "darkmark.git.blame",
+          "when": "!explorerResourceIsFolder",
+          "group": "darkmark@2"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "darkmark.git.fileHistory",
+          "when": "resourceScheme == file",
+          "group": "darkmark@1"
+        },
+        {
+          "command": "darkmark.git.blame",
+          "when": "resourceScheme == file",
+          "group": "darkmark@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "darkmark.git.fileHistory",
+          "when": "resourceScheme == file",
+          "group": "darkmark@1"
+        },
+        {
+          "command": "darkmark.git.blame",
+          "when": "resourceScheme == file",
+          "group": "darkmark@2"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
     "typecheck": "tsc --noEmit -p ./ && tsc --noEmit -p ./tsconfig.webview.json",
     "build": "npm run typecheck && node build.mjs",
     "watch": "node build.mjs --watch",
-    "test": "esbuild src/webview/lib/csv.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.test-out/csv.mjs && node --test test/*.test.mjs",
+    "test": "esbuild csv=src/webview/lib/csv.ts log=src/git/log.ts graph=src/git/graph.ts diff=src/git/diff.ts status=src/git/status.ts rebase=src/git/rebase.ts gitrun=src/git/runner.ts git-editor=src/git/editor.ts --bundle --platform=node --format=esm --log-level=warning --outdir=.test-out --out-extension:.js=.mjs && node --test test/*.test.mjs",
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
