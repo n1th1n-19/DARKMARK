@@ -1,5 +1,18 @@
 # Release Notes
 
+## v3.4.0
+
+### The GitHub tab now looks like GitHub
+
+- **Pull requests** with GitHub's Open / Closed lists, avatars, colored labels and check icons. A pull request has the Conversation, Commits, Checks and Files changed tabs, a timeline of comments, reviews and commits, and the sidebar with reviewers and labels.
+- **The merge box**: review and check status, conflicts, and a green **Merge pull request** button with a menu for squash or rebase, then a confirm step with "delete branch". **Close pull request** sits next to **Comment**, as on GitHub. Drafts get **Ready for review**.
+- **Review changes** on the Files changed tab: comment, approve or request changes.
+- **Actions**: runs list, and a run page with jobs and steps; click a step to read its log.
+- **Commits**: the branch's history on GitHub, grouped by day.
+- Comments render like on GitHub, including folded `<details>` sections, task lists and `> [!NOTE]` alerts.
+
+---
+
 ## v3.3.0
 
 ### New: GitHub tab

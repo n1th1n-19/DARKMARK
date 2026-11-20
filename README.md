@@ -63,12 +63,19 @@ Open the Git panel with **darkmark Git** in the status bar, or **darkmark: Git**
 
 The **GitHub** tab works through the [GitHub CLI](https://cli.github.com) (`gh`), so darkmark never handles a token. If `gh` is missing or logged out, the tab shows what to run (`gh auth login`).
 
-- **Pull requests**: open, mine or review requested. A pull request shows its description, checks, comments and diff. Comment, review (approve, request changes, comment), check out, close, or merge (merge commit, squash or rebase, optionally deleting the branch). **New pull request…** creates one from the current branch, as a draft if you like.
-- **Issues**: filter by state or GitHub search, view, comment, create, close and reopen.
-- **Actions**: workflow runs for the current branch, the last 2,000 lines of a failed run's log, and rerun.
-- In the graph, commits that are the head of a pull request show its number; click it to open the pull request.
+It is laid out like github.com, with avatars, colored labels and the same state colors.
 
-Descriptions and comments are rendered as Markdown with raw HTML turned off, and links open in your browser.
+- **Pull requests**: an Open / Closed list (all, created by me, or review requested) with check status and comment counts. A pull request has GitHub's Conversation, Commits, Checks and Files changed tabs:
+  - a timeline of comments, reviews and pushed commits, with Reviewers, Labels and Development in the sidebar;
+  - the merge box: review state, checks, conflicts, and a **Merge pull request** button whose menu switches to squash or rebase, with a confirm step and an option to delete the branch. Drafts get **Ready for review**;
+  - **Close pull request** / **Reopen pull request** next to **Comment**;
+  - **Review changes** on the Files changed tab: comment, approve or request changes.
+- **Issues**: Open / Closed lists with GitHub search, the issue timeline, comment, create, close and reopen.
+- **Actions**: workflow runs (this branch or all branches); a run page with its jobs and steps; click a step for its log (last 2,000 lines); re-run all or failed jobs.
+- **Commits**: the branch's commits on GitHub, grouped by day.
+- In the graph, commits that head a pull request show its number; click it to open the pull request.
+
+Descriptions and comments are rendered as GitHub Markdown, including `<details>`, task lists and alerts. The HTML is rebuilt from an allowlist, so scripts, styles and forms never get in. The only remote images allowed are GitHub avatars; other images become links. Links open in your browser.
 
 git never waits for a terminal: credential prompts fail with a message instead of hanging (SSH keys and credential helpers still work), and rebases and merges get their messages from the panel.
 

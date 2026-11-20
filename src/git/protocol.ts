@@ -4,6 +4,7 @@ import type { Commit } from './log';
 import type { FileDiff } from './diff';
 import type { Status } from './status';
 import type { GhState } from '../github/gh';
+import type { CheckRun } from '../github/rollup';
 
 export type SearchKind = 'message' | 'author' | 'hash' | 'path';
 export type Op = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | null;
@@ -25,47 +26,64 @@ export interface Overview {
   stashes: Stash[];
 }
 
-export interface GhComment { author: string; createdAt: string; bodyHtml: string }
+export interface Label { name: string; color: string }
+export type CheckSummary = 'pass' | 'fail' | 'pending' | null;
+export interface GhCommit { oid: string; headline: string; author: string; date: string }
+export interface TimelineItem {
+  kind: 'comment' | 'review' | 'commit'; author: string; date: string;
+  bodyHtml?: string; state?: string; commit?: GhCommit;
+}
 export interface PrItem {
-  number: number; title: string; author: string; headRefName: string; baseRefName: string;
-  isDraft: boolean; state: string; updatedAt: string; headRefOid: string;
+  number: number; title: string; author: string; headRefName: string; baseRefName: string; isDraft: boolean;
+  state: string; createdAt: string; updatedAt: string; headRefOid: string; labels: Label[]; comments: number;
+  checks: CheckSummary; reviewDecision: string;
 }
 export interface PrDetail extends PrItem {
-  bodyHtml: string; url: string; reviewDecision: string; mergeable: string;
-  additions: number; deletions: number; changedFiles: number; comments: GhComment[];
+  bodyHtml: string; url: string; mergeable: string; additions: number; deletions: number; changedFiles: number;
+  mergedAt: string | null; closedAt: string | null; timeline: TimelineItem[]; commits: GhCommit[];
+  checkRuns: CheckRun[]; reviewers: { login: string; state: string }[];
 }
-export interface Check { name: string; state: string; link: string; workflow: string; bucket: string }
-export interface IssueItem { number: number; title: string; author: string; state: string; labels: { name: string }[]; updatedAt: string }
-export interface IssueDetail extends IssueItem { bodyHtml: string; url: string; comments: GhComment[] }
+export interface IssueItem { number: number; title: string; author: string; state: string; labels: Label[]; createdAt: string; updatedAt: string; comments: number }
+export interface IssueDetail extends IssueItem { bodyHtml: string; url: string; closedAt: string | null; timeline: TimelineItem[] }
 export interface Run {
-  databaseId: number; displayTitle: string; status: string; conclusion: string; workflowName: string;
-  createdAt: string; event: string; headBranch: string; url: string;
+  databaseId: number; number: number; displayTitle: string; status: string; conclusion: string; workflowName: string;
+  createdAt: string; updatedAt: string; event: string; headBranch: string; url: string;
 }
+export interface Step { number: number; name: string; status: string; conclusion: string; startedAt: string; completedAt: string }
+export interface Job { databaseId: number; name: string; status: string; conclusion: string; startedAt: string; completedAt: string; url: string; steps: Step[] }
+export interface RunDetail extends Run { headSha: string; jobs: Job[] }
+type Filter = 'open' | 'mine' | 'review';
 
 /** GitHub tab requests (src/github/handlers.ts), name -> [params, result] */
 export interface GhApi {
   ghState: [{}, GhState];
-  prList: [{ filter: 'open' | 'mine' | 'review' }, PrItem[]];
+  /** Open and closed totals for the list header, via GitHub search */
+  counts: [{ kind: 'pr' | 'issue'; filter: Filter | ''; search: string }, { open: number; closed: number }];
+  prList: [{ state: 'open' | 'closed'; filter: Filter }, PrItem[]];
   prView: [{ number: number }, PrDetail];
-  prChecks: [{ number: number }, Check[]];
   prDiff: [{ number: number }, { kind: 'diff'; files: FileDiff[] } | { kind: 'large' }];
   prComment: [{ number: number; body: string }, void];
   prReview: [{ number: number; action: 'approve' | 'request-changes' | 'comment'; body: string }, void];
   prCheckout: [{ number: number }, void];
-  prClose: [{ number: number }, void];
+  prSetState: [{ number: number; open: boolean }, void];
+  prReady: [{ number: number }, void];
   prMerge: [{ number: number; method: 'merge' | 'squash' | 'rebase'; deleteBranch: boolean }, void];
   prCreate: [{ title: string; body: string; base: string; draft: boolean; labels: string[] }, string];
   /** head commit hash -> PR number, for the graph */
   prHeads: [{}, Record<string, number>];
   defaultBase: [{}, string];
-  issueList: [{ state: 'open' | 'closed' | 'all'; search: string }, IssueItem[]];
+  issueList: [{ state: 'open' | 'closed'; search: string }, IssueItem[]];
   issueView: [{ number: number }, IssueDetail];
   issueComment: [{ number: number; body: string }, void];
   issueCreate: [{ title: string; body: string; labels: string[] }, string];
   issueSetState: [{ number: number; open: boolean }, void];
-  runList: [{}, Run[]];
-  runLog: [{ id: number }, string];
+  runList: [{ all: boolean }, Run[]];
+  runView: [{ id: number }, RunDetail];
+  /** Log lines of one step of one job (last 2,000) */
+  jobLog: [{ jobId: number; step: string }, string];
   runRerun: [{ id: number; failedOnly: boolean }, void];
+  /** Commits on GitHub for the current branch (or the default branch when it isn't pushed) */
+  ghCommits: [{}, { branch: string; commits: GhCommit[] }];
   openUrl: [{ url: string }, void];
 }
 
