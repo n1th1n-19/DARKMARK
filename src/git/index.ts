@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { shell, viewerCsp } from '../webviewShell';
 import { allChanges, parseDiff, partialPatch } from './diff';
-import { Git, GitError, TooLarge } from './git';
+import { Git, GitError, TooLarge } from './runner';
 import { layout, type Lanes } from './graph';
 import { LOG_FORMAT, LogParser, type Commit } from './log';
 import type { Api, BlameLine, ChangedFile, DiffResult, Event, Method, Op, Overview, Ref, Request, Response } from './protocol';

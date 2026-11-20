@@ -1,5 +1,27 @@
 # Release Notes
 
+## v3.2.0
+
+### New: Git client
+
+A **Git panel** (status bar **darkmark Git**, or **darkmark: Git** in the Command Palette):
+
+- **Commit graph** of all branches with branch, tag and HEAD labels, and search by message, author, hash or path. Click a commit for its message, changed files and inline diffs.
+- **Changes**: stage, unstage or discard whole files, single hunks or single lines. Commit with amend and sign-off. Stashes.
+- **Right-click a commit** to checkout, branch, tag, merge, rebase, cherry-pick, revert or reset, or start an **interactive rebase**: drag to reorder and choose pick, reword, squash, fixup or drop, with the messages typed in the panel.
+- **Fetch, Pull and Push**. Force push only as `--force-with-lease`.
+- **Merge conflicts**: a banner lists the conflicted files, opens them in the merge editor, and offers Continue and Abort.
+- **File History** and **Blame** from the right-click menu of any file.
+
+git never waits on a terminal or an editor: a missing credential fails with a message instead of hanging.
+
+### Limits
+
+- The graph keeps at most 5,000 commits in memory at a time and loads 300 at a time as you scroll.
+- Diffs over 512 KB or 5,000 lines open in the diff editor instead of inline.
+
+---
+
 ## v3.1.0
 
 ### New

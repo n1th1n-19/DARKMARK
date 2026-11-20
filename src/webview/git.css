@@ -1,4 +1,6 @@
 /* darkmark Git panel (tokens from media/tokens.css, chrome from media/viewer.css) */
+/* display rules below would otherwise beat the hidden attribute */
+[hidden] { display: none !important; }
 .g-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
 .g-busy { color: var(--accent); }
 .g-primary { border-color: var(--accent); color: var(--accent); }

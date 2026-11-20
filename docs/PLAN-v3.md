@@ -1,6 +1,6 @@
 # darkmark v3 plan — file viewers, Git client, GitHub
 
-Status as of 2026-11-14. Phase 0 is shipped; the later phases ship in order (1, 1b, 2, 3).
+Status as of 2026-11-20. Phases 0, 1 and 1b are shipped and Phase 2 is in review; Phase 3 is next.
 
 ## Goal
 
@@ -41,7 +41,7 @@ This applies to every phase. Each viewer runs in its own renderer process. A ren
 | 100-page PDF, scrolled end to end | 150 MB | +138 MB (JS heap 2.4 MB after GC) |
 | 50,000-row CSV, scrolled end to end | 150 MB | +101 MB (JS heap 13.7 MB after GC) |
 | 20 MB docx with images | 150 MB | +97 MB (JS heap 3.4 MB after GC) |
-| Git panel, 5,000 commits scrolled | 150 MB | — |
+| Git panel, 6,298 commits scrolled end to end and back | 150 MB | +9 MB over the freshly opened panel (JS heap 2.8 MB after GC) |
 | A hidden viewer tab | back near the baseline | yes: the webview is torn down and restored from `setState` |
 
 The measurements come from an automated run in an isolated VSCodium window, driven over the DevTools protocol: open each file, scroll it end to end, force a GC inside the webview, then read its renderer's RSS.

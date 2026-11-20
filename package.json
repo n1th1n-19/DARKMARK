@@ -16,7 +16,9 @@
     "Other",
     "Visualization"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "customEditors": [
@@ -187,7 +189,7 @@
     "typecheck": "tsc --noEmit -p ./ && tsc --noEmit -p ./tsconfig.webview.json",
     "build": "npm run typecheck && node build.mjs",
     "watch": "node build.mjs --watch",
-    "test": "esbuild csv=src/webview/lib/csv.ts log=src/git/log.ts graph=src/git/graph.ts diff=src/git/diff.ts status=src/git/status.ts rebase=src/git/rebase.ts gitrun=src/git/git.ts git-editor=src/git/editor.ts --bundle --platform=node --format=esm --log-level=warning --outdir=.test-out --out-extension:.js=.mjs && node --test test/*.test.mjs",
+    "test": "esbuild csv=src/webview/lib/csv.ts log=src/git/log.ts graph=src/git/graph.ts diff=src/git/diff.ts status=src/git/status.ts rebase=src/git/rebase.ts gitrun=src/git/runner.ts git-editor=src/git/editor.ts --bundle --platform=node --format=esm --log-level=warning --outdir=.test-out --out-extension:.js=.mjs && node --test test/*.test.mjs",
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {

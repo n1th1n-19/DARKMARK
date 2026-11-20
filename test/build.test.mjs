@@ -29,3 +29,8 @@ test('every viewer registered in extension.ts has a bundle and a manifest entry'
 test('extension bundle does not inline the lazily loaded git bundle', () => {
   assert.ok(!readFileSync('out/extension.js', 'utf8').includes('GIT_TERMINAL_PROMPT'));
 });
+
+test('git bundle never requires ./git (itself): build.mjs keeps that path external', () => {
+  assert.ok(!readFileSync('out/git.js', 'utf8').includes('require("./git")'));
+  assert.ok(existsSync('out/git-editor.js'));
+});

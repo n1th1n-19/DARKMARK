@@ -1,3 +1,25 @@
+# 2026-11-20 — v3.2.0: interactive Git client
+
+## Changes
+
+- `src/extension.ts` — status-bar item and `darkmark.git.open`, `darkmark.git.fileHistory`, `darkmark.git.blame` commands; `out/git.js` is `require`d on first use
+- `package.json` — the three commands, explorer and editor context menus, `onStartupFinished` activation (so the status-bar item is there from the start); test script bundles the git modules
+- `build.mjs` — `out/git-editor.js` entry
+- `test/build.test.mjs` — `out/git.js` must not require `./git` (itself)
+- `README.md`, `RELEASE_NOTES.md`, `docs/PLAN-v3.md` — Git panel, limits, measured memory
+
+## New Files
+
+- `src/git/runner.ts` — runs git via `spawn` with argument arrays; `GIT_TERMINAL_PROMPT=0`, `LC_ALL=C`, timeouts (30 s, 120 s network), stdout size caps, children killed on dispose; `GIT_EDITOR` / `GIT_SEQUENCE_EDITOR` point at `out/git-editor.js`
+- `src/git/editor.ts` — the editor script: writes the next queued message or todo list, or keeps git's default
+- `src/git/index.ts` — the panel host: one panel, request handlers for every view and action, refresh on HEAD/index/refs changes (300 ms debounce, deferred while hidden)
+- `src/git/protocol.ts` — typed requests between panel and host
+- `src/git/log.ts`, `graph.ts`, `diff.ts`, `status.ts`, `rebase.ts` — streaming log parser, lane assignment that carries across pages, unified diff parser and partial-patch builder, porcelain v2 status parser, interactive-rebase plan
+- `src/webview/git.ts`, `git.css` — the panel UI: virtualized graph, commit detail, working tree, interactive rebase, blame, menus and confirm dialogs
+- `test/log-parse.test.mjs`, `git-graph.test.mjs`, `diff-parse.test.mjs`, `git-run.test.mjs` — parsers, lanes across a page boundary, line-staging round trips through `git apply`, and squash/reword rebase, conflict continue/abort and a credential-less push against real repositories
+
+---
+
 # 2026-11-14 — v3.1.0: Slides (pptx) viewer
 
 ## Changes
