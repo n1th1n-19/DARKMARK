@@ -5,10 +5,12 @@ import type { GraphRow } from '../git/graph';
 import type { Commit } from '../git/log';
 import type { FileDiff, Hunk } from '../git/diff';
 import type { FileStatus } from '../git/status';
+import type { CheckRun } from '../github/rollup';
 import type {
-  Api, BlameLine, DiffResult, Event, Method, Overview, RebaseAction, Ref, Response, SearchKind,
+  Api, BlameLine, DiffResult, Event, GhCommit, Label, Method, Overview, PrDetail, PrItem, RebaseAction, Ref, Response, SearchKind, TimelineItem,
 } from '../git/protocol';
 import { app, getState, h, message, setState, vscode } from './common';
+import { AVATAR_HOST, sanitize } from './lib/sanitize';
 import './git.css';
 
 const PAGE = 300;
@@ -18,19 +20,23 @@ const LANE_W = 14;
 const MAX_LANES = 24;
 
 type ViewName = 'graph' | 'changes' | 'history' | 'blame' | 'github';
-type GhSection = 'prs' | 'issues' | 'actions';
+type GhSection = 'prs' | 'issues' | 'actions' | 'commits';
 interface UiState {
   view: ViewName;
   path?: string;
   search: { kind: SearchKind; q: string };
   selected?: string;
   top: number;
-  gh: { section: GhSection; prFilter: 'open' | 'mine' | 'review'; issueState: 'open' | 'closed' | 'all'; issueSearch: string; open?: number };
+  gh: {
+    section: GhSection; listState: 'open' | 'closed'; prFilter: 'open' | 'mine' | 'review'; issueSearch: string;
+    open?: number; tab?: 'conversation' | 'commits' | 'checks' | 'files'; run?: number; job?: number; allRuns: boolean;
+  };
 }
 const state = getState<UiState>({
   view: 'graph', search: { kind: 'message', q: '' }, top: 0,
-  gh: { section: 'prs', prFilter: 'open', issueState: 'open', issueSearch: '' },
+  gh: { section: 'prs', listState: 'open', prFilter: 'open', issueSearch: '', allRuns: false },
 });
+state.gh = { section: 'prs', listState: 'open', prFilter: 'open', issueSearch: '', allRuns: false, ...(state.gh as Partial<UiState['gh']>) };
 const save = () => setState(state);
 
 // ── Requests ──────────────────────────────────────────────────────────
@@ -319,7 +325,7 @@ function refBadges(c: Commit): HTMLElement[] {
     return h('span', { className: `g-ref${tag ? ' g-tag' : ''}${head ? ' g-head' : ''}`, title: r }, name);
   }).concat(prHeads?.[c.hash] ? [h('button', {
     className: 'g-ref g-pr', title: 'Open this pull request in the GitHub tab',
-    onclick: (e: MouseEvent) => { e.stopPropagation(); state.gh.section = 'prs'; state.gh.open = prHeads![c.hash]; setView('github'); },
+    onclick: (e: MouseEvent) => { e.stopPropagation(); Object.assign(state.gh, { section: 'prs', open: prHeads![c.hash], tab: undefined }); setView('github'); },
   }, `#${prHeads[c.hash]}`)] : []);
 }
 
@@ -873,114 +879,278 @@ function blameView(file: string) {
   };
 }
 
-// ── GitHub (through gh) ───────────────────────────────────────────────
+// ── GitHub (through gh), laid out like github.com ──────────────────────
 
-const iso = (s: string) => (s ? dateFmt.format(new Date(s)) : '');
+/** Small 16px stroke icons, drawn here (no icon font, no emoji) */
+const ICONS: Record<string, string> = {
+  prOpen: '<circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><path d="M4 5.3v5.4"/><circle cx="12" cy="12.5" r="1.8"/><path d="M12 10.7V6.5a2 2 0 0 0-2-2H7.5"/><path d="M9 3l-1.5 1.5L9 6"/>',
+  prMerged: '<circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><path d="M4 5.3v5.4"/><circle cx="12" cy="8.5" r="1.8"/><path d="M4 5.3c0 2.5 2.5 3.2 6.2 3.2"/>',
+  prClosed: '<circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><path d="M4 5.3v5.4"/><circle cx="12" cy="12.5" r="1.8"/><path d="M12 10.7V8"/><path d="M10.2 2.2l3.6 3.6M13.8 2.2l-3.6 3.6"/>',
+  prDraft: '<circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><path d="M4 5.3v5.4"/><circle cx="12" cy="12.5" r="1.8"/><path d="M12 9.5v-.8M12 6.5v-.8M12 3.5v-.8"/>',
+  issueOpen: '<circle cx="8" cy="8" r="6.2"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/>',
+  issueClosed: '<circle cx="8" cy="8" r="6.2"/><path d="M5.2 8.2l2 2 3.6-4"/>',
+  check: '<path d="M3 8.5l3.2 3.2L13 4.8"/>',
+  x: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  dot: '<circle cx="8" cy="8" r="3.2" fill="currentColor"/>',
+  skip: '<circle cx="8" cy="8" r="6.2"/><path d="M3.8 12.2l8.4-8.4"/>',
+  comment: '<path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z"/>',
+  commit: '<circle cx="8" cy="8" r="2.6"/><path d="M1 8h4.4M10.6 8H15"/>',
+  clock: '<circle cx="8" cy="8" r="6.2"/><path d="M8 4.5V8l2.4 1.6"/>',
+  eye: '<path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="1.8"/>',
+  play: '<circle cx="8" cy="8" r="6.2"/><path d="M6.6 5.4v5.2L10.6 8z" fill="currentColor"/>',
+  chevron: '<path d="M6 4l4 4-4 4"/>',
+  caret: '<path d="M4.5 6.5L8 10l3.5-3.5"/>',
+  file: '<path d="M4 1.8h5l3 3V14H4z"/><path d="M9 1.8v3h3"/>',
+  branch: '<circle cx="4.5" cy="3.5" r="1.6"/><circle cx="4.5" cy="12.5" r="1.6"/><circle cx="11.5" cy="5" r="1.6"/><path d="M4.5 5.1v5.8M11.5 6.6c0 2.8-7 1.6-7 4.3"/>',
+};
+function icon(name: string, cls = ''): SVGSVGElement {
+  const t = document.createElement('template');
+  t.innerHTML = `<svg class="gi ${cls}" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+  return t.content.firstChild as SVGSVGElement;
+}
 
-/** Markdown that gh returned, rendered on the host with raw HTML escaped */
-function mdBlock(html: string): HTMLElement {
-  const el = h('div', { className: 'g-md' });
-  el.innerHTML = html || '<p class="dm-info">No description.</p>';
+/** Profile picture; falls back to the login's initial when the image can't load */
+function avatar(login: string, size = 20): HTMLElement {
+  const fallback = () => {
+    const s = h('span', { className: 'g-avatar g-avatar-ph', title: login }, (login.replace(/^app\//, '')[0] ?? '?').toUpperCase());
+    s.style.width = s.style.height = `${size}px`;
+    s.style.fontSize = `${Math.round(size * 0.5)}px`;
+    return s;
+  };
+  if (!/^[\w.-]+(\[bot\])?$/.test(login)) return fallback();
+  const img = h('img', { className: 'g-avatar', alt: '', title: login, width: size, height: size, loading: 'lazy',
+    src: `${AVATAR_HOST}${encodeURIComponent(login.replace(/\[bot\]$/, ''))}?s=${size * 2}&v=4` });
+  img.addEventListener('error', () => img.replaceWith(fallback()), { once: true });
+  return img;
+}
+
+const MIN = 60, HOUR = 3600, DAY = 86400;
+/** "3 hours ago", like GitHub; older than a month gives the date */
+function ago(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const s = (Date.now() - Date.parse(iso)) / 1000;
+  if (!(s >= 0)) return iso;
+  if (s < 45) return 'just now';
+  const unit = (v: number, u: string) => `${v} ${u}${v === 1 ? '' : 's'} ago`;
+  if (s < HOUR) return unit(Math.max(1, Math.round(s / MIN)), 'minute');
+  if (s < DAY) return unit(Math.round(s / HOUR), 'hour');
+  if (s < 2 * DAY) return 'yesterday';
+  if (s < 30 * DAY) return unit(Math.round(s / DAY), 'day');
+  return `on ${new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+const dayFmt = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+function duration(from?: string | null, to?: string | null): string {
+  const s = from && to ? Math.round((Date.parse(to) - Date.parse(from)) / 1000) : NaN;
+  if (!(s >= 0)) return '';
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+
+function labelPill(l: Label): HTMLElement {
+  const el = h('span', { className: 'g-label-pill', title: l.name }, l.name);
+  el.style.setProperty('--lc', `#${l.color}`);
   return el;
 }
 
-function commentList(cs: { author: string; createdAt: string; bodyHtml: string }[]): HTMLElement[] {
-  return cs.map((c) => h('div', { className: 'g-comment' },
-    h('div', { className: 'dm-info' }, `${c.author} · ${iso(c.createdAt)}`), mdBlock(c.bodyHtml)));
+/** Rendered GitHub Markdown, rebuilt from the allowlist */
+function mdBlock(html: string, empty = 'No description provided.'): HTMLElement {
+  const el = h('div', { className: 'g-md' });
+  if (html.trim()) el.append(sanitize(html));
+  else el.append(h('p', { className: 'g-muted' }, h('em', {}, empty)));
+  // GitHub alerts: a blockquote starting "[!NOTE]" (TIP, IMPORTANT, WARNING, CAUTION) becomes a callout
+  for (const q of Array.from(el.querySelectorAll('blockquote'))) {
+    const first = q.firstElementChild;
+    const m = first && /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i.exec(first.textContent ?? '');
+    if (!first || !m) continue;
+    const kind = m[1].toLowerCase();
+    const textNode = Array.from(first.childNodes).find((c) => c.nodeType === Node.TEXT_NODE && /\[!/.test(c.textContent ?? ''));
+    if (textNode) textNode.textContent = (textNode.textContent ?? '').replace(/^\s*\[![A-Z]+\]\s*/i, '');
+    q.classList.add('g-alert', `g-alert-${kind}`);
+    q.prepend(h('p', { className: 'g-alert-title' }, kind[0].toUpperCase() + kind.slice(1)));
+  }
+  return el;
 }
 
-function commentBox(label: string, send: (body: string) => Promise<boolean>): HTMLElement {
-  const ta = h('textarea', { className: 'g-field', rows: 3, placeholder: `${label} (Markdown)` });
-  return h('div', { className: 'g-commit' }, ta, h('div', { className: 'g-commit-row' }, h('span', { className: 'dm-spacer' }),
-    btn(label, label, async () => { if (await send(ta.value)) ta.value = ''; }, 'g-primary')));
+const strong = (t: string) => h('strong', {}, t);
+const branchPill = (name: string) => h('span', { className: 'g-branch' }, name);
+
+/** PR or issue state badge: icon + word, colored like GitHub */
+function statePill(kind: 'pr' | 'issue', state: string, draft = false): HTMLElement {
+  const s = draft && state === 'OPEN' ? 'DRAFT' : state;
+  const [ic, word, cls] = kind === 'issue'
+    ? s === 'OPEN' ? ['issueOpen', 'Open', 'open'] : ['issueClosed', 'Closed', 'done']
+    : ({ OPEN: ['prOpen', 'Open', 'open'], DRAFT: ['prDraft', 'Draft', 'draft'], MERGED: ['prMerged', 'Merged', 'done'], CLOSED: ['prClosed', 'Closed', 'closed'] } as Record<string, string[]>)[s] ?? ['prOpen', s, 'open'];
+  return h('span', { className: `g-state g-state-${cls}` }, icon(ic), word);
+}
+function stateIcon(kind: 'pr' | 'issue', state: string, draft = false): SVGSVGElement {
+  if (kind === 'issue') return state === 'OPEN' ? icon('issueOpen', 'g-c-open') : icon('issueClosed', 'g-c-done');
+  if (state === 'MERGED') return icon('prMerged', 'g-c-done');
+  if (state === 'CLOSED') return icon('prClosed', 'g-c-closed');
+  return draft ? icon('prDraft', 'g-c-muted') : icon('prOpen', 'g-c-open');
+}
+function checkIcon(state: string | null): SVGSVGElement | '' {
+  if (state === 'pass') return icon('check', 'g-c-open');
+  if (state === 'fail') return icon('x', 'g-c-closed');
+  if (state === 'pending') return icon('dot', 'g-c-wait');
+  if (state === 'skip' || state === 'neutral') return icon('skip', 'g-c-muted');
+  return '';
+}
+/** Workflow run / job / step status, from GitHub's status + conclusion */
+function runIcon(status: string, conclusion: string): SVGSVGElement {
+  if (status && status !== 'completed') return icon('dot', 'g-c-wait g-pulse');
+  if (conclusion === 'success') return icon('check', 'g-c-open');
+  if (conclusion === 'failure' || conclusion === 'timed_out' || conclusion === 'startup_failure') return icon('x', 'g-c-closed');
+  return icon('skip', 'g-c-muted');
 }
 
-const bucketClass = (b: string) => (b === 'pass' ? 'g-ok' : b === 'fail' || b === 'cancel' ? 'g-bad' : 'g-wait');
+/** GitHub's five-square +/- bar */
+function diffstat(add: number, del: number): HTMLElement {
+  const total = add + del;
+  const g = total ? Math.round((add / total) * 5) : 0, r = total ? Math.min(5 - g, Math.round((del / total) * 5)) : 0;
+  return h('span', { className: 'g-diffstat' },
+    h('span', { className: 'g-c-open' }, `+${add.toLocaleString()}`), ' ', h('span', { className: 'g-c-closed' }, `−${del.toLocaleString()}`), ' ',
+    ...Array.from({ length: 5 }, (_, i) => h('span', { className: `g-sq ${i < g ? 'g-sq-add' : i < g + r ? 'g-sq-del' : ''}` })));
+}
+
+/** Commits grouped by day with GitHub's "Commits on <date>" headings */
+function commitHistory(commits: GhCommit[], newestFirst: boolean): HTMLElement {
+  const list = newestFirst ? commits : [...commits].reverse();
+  const groups = new Map<string, GhCommit[]>();
+  for (const c of list) {
+    const k = dayFmt(c.date);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(c);
+  }
+  return h('div', { className: 'g-history' }, ...[...groups].map(([day, cs]) => h('div', { className: 'g-history-day' },
+    h('div', { className: 'g-history-head' }, icon('commit', 'g-c-muted'), `Commits on ${day}`),
+    h('div', { className: 'g-box' }, ...cs.map((c) => h('div', { className: 'g-box-row g-commit-row2' },
+      h('div', { className: 'g-grow' },
+        h('div', { className: 'g-row-title' }, c.headline),
+        h('div', { className: 'g-row-meta' }, avatar(c.author, 16), strong(c.author), ` committed ${ago(c.date)}`)),
+      h('button', { className: 'dm-btn g-sha', title: 'Copy the full SHA', onclick: () => call('copy', { text: c.oid }) }, c.oid.slice(0, 7))))))));
+}
 
 function githubView() {
-  const head = h('div', { className: 'g-search' });
+  const nav = h('nav', { className: 'g-gh-nav' });
   const main = h('div', { className: 'dm-view g-gh' });
-  body.replaceChildren(head, main);
+  body.replaceChildren(nav, main);
   let gen = 0;
   // Links in GitHub text open in the browser; the webview never navigates
   main.addEventListener('click', (e) => {
-    const a = (e.target as HTMLElement).closest('.g-md a') as HTMLAnchorElement | null;
+    const a = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
     if (!a) return;
     e.preventDefault();
     const href = a.getAttribute('href') ?? '';
     if (/^(https?|mailto):/i.test(href)) call('openUrl', { url: href });
   });
 
-  const tab = (s: GhSection, label: string) => {
-    const b = btn(label, label, () => { state.gh.section = s; state.gh.open = undefined; save(); load(); });
-    b.setAttribute('aria-pressed', String(state.gh.section === s));
-    return b;
-  };
-  const open = (num?: number) => { state.gh.open = num; save(); load(); };
+  const go = (patch: Partial<UiState['gh']>) => { Object.assign(state.gh, patch); save(); load(); };
   const ghAct = async <M extends Method>(label: string, method: M, params: Api[M][0]) => {
     const ok = await act(label, method, params);
     if (ok) load();
     return ok;
   };
 
+  function navTab(section: GhSection, ic: string, label: string, count?: number) {
+    const b = h('button', { className: 'g-gh-tab', onclick: () => go({ section, open: undefined, run: undefined, tab: undefined }) },
+      icon(ic), label, ...(count !== undefined ? [h('span', { className: 'g-counter' }, String(count))] : []));
+    b.setAttribute('aria-selected', String(state.gh.section === section));
+    return b;
+  }
+
   async function load() {
     const g = ++gen;
-    head.replaceChildren(tab('prs', 'Pull requests'), tab('issues', 'Issues'), tab('actions', 'Actions'));
     message(main, 'Loading…');
     try {
       const s = await call('ghState', {});
       if (g !== gen) return;
       if (!s.ok) {
+        nav.replaceChildren();
         const cmd = s.reason === 'missing' ? 'https://cli.github.com' : 'gh auth login';
-        main.replaceChildren(h('div', { className: 'dm-message' }, h('p', {}, s.message),
-          h('p', {}, h('code', { className: 'g-mono' }, cmd), ' ',
-            btn('Copy', 'Copy to the clipboard', () => call('copy', { text: cmd })), ' ', btn('Retry', 'Check again', () => load()))));
+        main.replaceChildren(h('div', { className: 'g-blank' }, icon('branch', 'g-blank-icon'), h('h3', {}, 'Connect GitHub'), h('p', {}, s.message),
+          h('p', {}, h('code', { className: 'g-mono' }, cmd), ' ', btn('Copy', 'Copy to the clipboard', () => call('copy', { text: cmd })), ' ', btn('Retry', 'Check again', () => load()))));
         return;
       }
-      head.append(h('span', { className: 'dm-info' }, `Signed in to gh as ${s.user}`));
-      const view = state.gh.section === 'prs' ? (state.gh.open ? prDetail(state.gh.open) : prList())
-        : state.gh.section === 'issues' ? (state.gh.open ? issueDetail(state.gh.open) : issueList())
-        : runList();
-      const els = await view;
-      if (g === gen) main.replaceChildren(...els);
+      me = s.user;
+      nav.replaceChildren(navTab('prs', 'prOpen', 'Pull requests'), navTab('issues', 'issueOpen', 'Issues'), navTab('actions', 'play', 'Actions'), navTab('commits', 'commit', 'Commits'),
+        h('span', { className: 'dm-spacer' }), h('span', { className: 'g-me' }, avatar(s.user, 20), s.user));
+      const els = state.gh.section === 'prs' ? await (state.gh.open ? prPage(state.gh.open) : list('pr'))
+        : state.gh.section === 'issues' ? await (state.gh.open ? issuePage(state.gh.open) : list('issue'))
+        : state.gh.section === 'actions' ? await (state.gh.run ? runPage(state.gh.run) : runList())
+        : await commitsPage();
+      if (g === gen) main.replaceChildren(h('div', { className: 'g-gh-inner' }, ...els));
     } catch (e) {
       if (g === gen) message(main, (e as Error).message, true);
     }
   }
 
-  const back = (label: string) => btn(`← ${label}`, label, () => open(undefined));
-  const row = (title: string, meta: string, onclick: () => void, extra: (Node | string)[] = []) =>
-    h('button', { className: 'g-gh-row', onclick }, h('span', { className: 'g-gh-title' }, title, ...extra), h('span', { className: 'dm-info' }, meta));
+  // ── Lists ──
 
-  async function prList(): Promise<Node[]> {
-    const filter = h('select', { className: 'dm-btn', title: 'Which pull requests',
-      onchange: () => { state.gh.prFilter = filter.value as UiState['gh']['prFilter']; save(); load(); } },
-    ...([['open', 'Open'], ['mine', 'Mine'], ['review', 'Review requested']] as const).map(([v, t]) => h('option', { value: v, selected: state.gh.prFilter === v }, t)));
-    head.append(filter, btn('New pull request…', 'Create a pull request from the current branch', () => newPr()));
-    const prs = await call('prList', { filter: state.gh.prFilter });
-    if (!prs.length) return [h('div', { className: 'dm-message' }, 'No pull requests here.')];
-    return prs.map((p) => row(`#${p.number} ${p.title}`,
-      `${p.author} · ${p.headRefName} → ${p.baseRefName} · ${iso(p.updatedAt)}`, () => open(p.number),
-      p.isDraft ? [h('span', { className: 'g-ref' }, 'draft')] : []));
+  async function list(kind: 'pr' | 'issue'): Promise<Node[]> {
+    const isPr = kind === 'pr';
+    const filter = isPr ? state.gh.prFilter : '';
+    const search = isPr ? '' : state.gh.issueSearch;
+    const listState = state.gh.listState;
+    const [items, counts] = await Promise.all([
+      isPr ? call('prList', { state: listState, filter: state.gh.prFilter }) : call('issueList', { state: listState, search }),
+      call('counts', { kind, filter, search }).catch(() => null),
+    ]);
+
+    const filterSel = isPr ? h('select', { className: 'dm-btn', title: 'Filter',
+      onchange: () => go({ prFilter: filterSel!.value as UiState['gh']['prFilter'] }) },
+    ...([['open', 'All'], ['mine', 'Created by me'], ['review', 'Review requested']] as const).map(([v, t]) => h('option', { value: v, selected: state.gh.prFilter === v }, t))) : null;
+    const q = isPr ? null : h('input', { className: 'dm-input g-q', type: 'search', placeholder: 'Filter issues (GitHub search, Enter)', value: state.gh.issueSearch });
+    q?.addEventListener('keydown', (e) => { if (e.key === 'Enter') go({ issueSearch: q.value }); });
+    const newBtn = btn(isPr ? 'New pull request' : 'New issue', isPr ? 'Create a pull request from the current branch' : 'Create an issue',
+      () => (isPr ? newPr() : newIssue()), 'g-btn-green');
+
+    const toggle = (st: 'open' | 'closed') => {
+      const n = counts ? counts[st] : null;
+      const b = h('button', { className: 'g-toggle', onclick: () => go({ listState: st }) },
+        isPr ? icon(st === 'open' ? 'prOpen' : 'check') : icon(st === 'open' ? 'issueOpen' : 'check'),
+        `${n === null ? '' : n.toLocaleString() + ' '}${st === 'open' ? 'Open' : 'Closed'}`);
+      b.setAttribute('aria-pressed', String(listState === st));
+      return b;
+    };
+
+    const rows = items.map((it) => {
+      const pr = isPr ? (it as PrItem) : null;
+      const meta = pr && pr.state === 'MERGED' ? `#${it.number} by ${it.author} was merged ${ago(it.updatedAt)}`
+        : it.state !== 'OPEN' ? `#${it.number} by ${it.author} was closed ${ago(it.updatedAt)}`
+        : `#${it.number} opened ${ago(it.createdAt)} by ${it.author}${pr?.isDraft ? ' • Draft' : ''}`;
+      const review = pr?.reviewDecision === 'APPROVED' ? 'Approved' : pr?.reviewDecision === 'CHANGES_REQUESTED' ? 'Changes requested'
+        : pr?.reviewDecision === 'REVIEW_REQUIRED' ? 'Review required' : '';
+      return h('button', { className: 'g-box-row g-list-row', onclick: () => go({ open: it.number, tab: undefined }) },
+        h('span', { className: 'g-row-icon' }, stateIcon(kind, it.state, pr?.isDraft)),
+        h('span', { className: 'g-grow' },
+          h('span', { className: 'g-row-title' }, it.title, ...(pr ? [' ', checkIcon(pr.checks)] : []), ...it.labels.map(labelPill)),
+          h('span', { className: 'g-row-meta' }, meta, ...(review ? [' • ', review] : []))),
+        h('span', { className: 'g-row-side' }, ...(it.comments ? [icon('comment'), String(it.comments)] : [])));
+    });
+
+    return [
+      h('div', { className: 'g-subhead' }, ...(filterSel ? [filterSel] : []), ...(q ? [q] : []), h('span', { className: 'dm-spacer' }), newBtn),
+      h('div', { className: 'g-box' },
+        h('div', { className: 'g-box-head' }, toggle('open'), toggle('closed')),
+        ...(rows.length ? rows : [h('div', { className: 'g-blank' }, isPr ? icon('prOpen', 'g-blank-icon') : icon('issueOpen', 'g-blank-icon'),
+          h('h3', {}, `No ${listState} ${isPr ? 'pull requests' : 'issues'}${isPr && state.gh.prFilter !== 'open' ? ' for this filter' : ''}`))])),
+    ];
   }
 
   async function newPr() {
     const [base, last] = await Promise.all([call('defaultBase', {}).catch(() => ''), call('lastMessage', {}).catch(() => '')]);
-    const v = await form(`New pull request from ${overview?.status.branch ?? 'HEAD'}`, [
+    const v = await form(`Open a pull request from ${overview?.status.branch ?? 'HEAD'}`, [
       { key: 'title', label: 'Title', value: last.split('\n')[0] },
       { key: 'body', label: 'Description (Markdown)', kind: 'textarea' },
       { key: 'base', label: 'Base branch', value: base },
       { key: 'labels', label: 'Labels (comma-separated)' },
-      { key: 'draft', label: 'Draft', kind: 'check' },
-    ], 'Create');
+      { key: 'draft', label: 'Create as draft', kind: 'check' },
+    ], 'Create pull request');
     if (!v) return;
     busy.textContent = 'Creating pull request…';
     try {
-      const url = await call('prCreate', { title: String(v.title), body: String(v.body), base: String(v.base),
-        draft: !!v.draft, labels: String(v.labels).split(',') });
-      const num = Number(/\/pull\/(\d+)/.exec(url)?.[1]);
+      const url = await call('prCreate', { title: String(v.title), body: String(v.body), base: String(v.base), draft: !!v.draft, labels: String(v.labels).split(',') });
       prHeads = null;
-      open(num || undefined);
+      go({ open: Number(/\/pull\/(\d+)/.exec(url)?.[1]) || undefined, tab: undefined });
     } catch (e) {
       showError(`Create pull request failed: ${(e as Error).message}`);
     } finally {
@@ -988,134 +1158,371 @@ function githubView() {
     }
   }
 
-  async function prDetail(num: number): Promise<Node[]> {
-    const [p, checks] = await Promise.all([call('prView', { number: num }), call('prChecks', { number: num }).catch(() => [])]);
-    const diffBox = h('div', {});
-    const showDiff = btn(`Show diff (${p.changedFiles} file${p.changedFiles === 1 ? '' : 's'}, +${p.additions} −${p.deletions})`, 'gh pr diff', async () => {
-      message(diffBox, 'Loading…');
+  async function newIssue() {
+    const v = await form('New issue', [{ key: 'title', label: 'Title' }, { key: 'body', label: 'Description (Markdown)', kind: 'textarea' },
+      { key: 'labels', label: 'Labels (comma-separated)' }], 'Submit new issue');
+    if (!v) return;
+    try {
+      const url = await call('issueCreate', { title: String(v.title), body: String(v.body), labels: String(v.labels).split(',') });
+      go({ open: Number(/\/issues\/(\d+)/.exec(url)?.[1]) || undefined });
+    } catch (e) {
+      showError(`Create issue failed: ${(e as Error).message}`);
+    }
+  }
+
+  // ── Conversation pieces ──
+
+  function commentCard(author: string, date: string, html: string, badge = '', verb = 'commented'): HTMLElement {
+    return h('div', { className: 'g-tl-item' },
+      h('div', { className: 'g-tl-avatar' }, avatar(author, 40)),
+      h('div', { className: 'g-card' },
+        h('div', { className: 'g-card-head' }, strong(author), ` ${verb} ${ago(date)}`,
+          ...(badge ? [h('span', { className: 'dm-spacer' }), h('span', { className: 'g-role' }, badge)] : [])),
+        h('div', { className: 'g-card-body' }, mdBlock(html, 'No description provided.'))));
+  }
+
+  function timelineView(items: TimelineItem[], author: string): HTMLElement[] {
+    const out: HTMLElement[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === 'comment') { out.push(commentCard(it.author, it.date, it.bodyHtml ?? '', it.author === author ? 'Author' : '')); continue; }
+      if (it.kind === 'commit') {
+        // Consecutive commits by one person collapse into "added N commits", as on GitHub
+        const run = [it];
+        while (items[i + 1]?.kind === 'commit' && items[i + 1].author === it.author) run.push(items[++i]);
+        out.push(h('div', { className: 'g-tl-event' }, h('span', { className: 'g-tl-badge' }, icon('commit')),
+          h('div', { className: 'g-grow' },
+            h('div', {}, avatar(it.author, 20), ' ', strong(it.author), ` added ${run.length} commit${run.length === 1 ? '' : 's'} ${ago(run[run.length - 1].date)}`),
+            ...run.map((c) => h('div', { className: 'g-tl-commit' }, icon('commit', 'g-c-muted'), h('span', { className: 'g-grow' }, c.commit!.headline),
+              h('span', { className: 'g-mono g-muted' }, c.commit!.oid.slice(0, 7)))))));
+        continue;
+      }
+      const st = it.state ?? '';
+      const [ic, cls, verb] = st === 'APPROVED' ? ['check', 'g-badge-open', 'approved these changes']
+        : st === 'CHANGES_REQUESTED' ? ['x', 'g-badge-closed', 'requested changes'] : st === 'DISMISSED' ? ['skip', '', 'had a review dismissed'] : ['eye', '', 'reviewed'];
+      out.push(h('div', { className: 'g-tl-event' }, h('span', { className: `g-tl-badge ${cls}` }, icon(ic)),
+        h('div', { className: 'g-grow' }, h('div', {}, avatar(it.author, 20), ' ', strong(it.author), ` ${verb} ${ago(it.date)}`))));
+      if (it.bodyHtml?.trim()) out.push(commentCard(it.author, it.date, it.bodyHtml, '', 'left a review'));
+    }
+    return out;
+  }
+
+  function composer(placeholder: string, extra: (getBody: () => string) => HTMLElement[], send: (body: string) => Promise<boolean>): HTMLElement {
+    const ta = h('textarea', { className: 'g-field g-composer-ta', rows: 5, placeholder });
+    return h('div', { className: 'g-tl-item g-composer' },
+      h('div', { className: 'g-tl-avatar' }, avatar(me ?? '?', 40)),
+      h('div', { className: 'g-card' },
+        h('div', { className: 'g-card-head g-tabs-mini' }, h('span', { className: 'g-tab-mini' }, 'Write'), h('span', { className: 'g-muted' }, 'Markdown is supported')),
+        h('div', { className: 'g-card-body' }, ta,
+          h('div', { className: 'g-composer-btns' }, ...extra(() => ta.value),
+            btn('Comment', 'Add a comment', async () => { if (await send(ta.value)) ta.value = ''; }, 'g-btn-green')))));
+  }
+
+  function sidebar(sections: [string, Node[]][]): HTMLElement {
+    return h('aside', { className: 'g-sidebar' }, ...sections.map(([title, items]) => h('div', { className: 'g-side-sec' },
+      h('div', { className: 'g-side-title' }, title), ...(items.length ? items : [h('div', { className: 'g-muted' }, 'None yet')]))));
+  }
+
+  // ── Pull request page ──
+
+  async function prPage(num: number): Promise<Node[]> {
+    const p = await call('prView', { number: num });
+    const tab = state.gh.tab ?? 'conversation';
+    const open = p.state === 'OPEN';
+    const commitsN = p.commits.length;
+    const failing = p.checkRuns.filter((c) => c.state === 'fail').length;
+    const pendingN = p.checkRuns.filter((c) => c.state === 'pending').length;
+
+    const tabBtn = (id: NonNullable<UiState['gh']['tab']>, ic: string, label: string, count: number) => {
+      const b = h('button', { className: 'g-pr-tab', onclick: () => go({ tab: id }) }, icon(ic), label, h('span', { className: 'g-counter' }, String(count)));
+      b.setAttribute('aria-selected', String(tab === id));
+      return b;
+    };
+    const sentence = p.state === 'MERGED'
+      ? [strong(p.author), ` merged ${commitsN} commit${commitsN === 1 ? '' : 's'} into `, branchPill(p.baseRefName), ' from ', branchPill(p.headRefName), ` ${ago(p.mergedAt)}`]
+      : [strong(p.author), ` ${open ? 'wants to merge' : 'proposed merging'} ${commitsN} commit${commitsN === 1 ? '' : 's'} into `, branchPill(p.baseRefName), ' from ', branchPill(p.headRefName)];
+
+    const header = [
+      h('div', { className: 'g-back' }, h('button', { className: 'g-link', onclick: () => go({ open: undefined, tab: undefined }) }, '← Pull requests')),
+      h('div', { className: 'g-title-row' },
+        h('h1', { className: 'g-title-big' }, p.title, ' ', h('span', { className: 'g-muted g-title-num' }, `#${p.number}`)),
+        h('div', { className: 'g-title-btns' },
+          btn('Checkout', `gh pr checkout ${p.number}`, () => act('Checkout', 'prCheckout', { number: num })),
+          btn('Open on GitHub', p.url, () => call('openUrl', { url: p.url })))),
+      h('div', { className: 'g-subtitle' }, statePill('pr', p.state, p.isDraft), h('span', {}, ...sentence)),
+      h('div', { className: 'g-pr-tabs' },
+        tabBtn('conversation', 'comment', 'Conversation', p.timeline.filter((t) => t.kind !== 'commit').length + 0),
+        tabBtn('commits', 'commit', 'Commits', commitsN),
+        tabBtn('checks', 'check', 'Checks', p.checkRuns.length),
+        tabBtn('files', 'file', 'Files changed', p.changedFiles),
+        h('span', { className: 'dm-spacer' }), diffstat(p.additions, p.deletions)),
+    ];
+
+    let content: Node[];
+    if (tab === 'commits') content = [commitHistory(p.commits, false)];
+    else if (tab === 'checks') content = [checksList(p.checkRuns)];
+    else if (tab === 'files') content = filesTab(p);
+    else {
+      content = [h('div', { className: 'g-pr-layout' },
+        h('div', { className: 'g-pr-main' },
+          h('div', { className: 'g-timeline' },
+            commentCard(p.author, p.createdAt, p.bodyHtml, 'Author'),
+            ...timelineView(p.timeline, p.author),
+            mergeBox(p, failing, pendingN),
+            composer('Leave a comment', () => p.state === 'MERGED' ? [] : [
+              open
+                ? btn('Close pull request', 'gh pr close', async () => {
+                  if (await confirmBox(`Close #${num}?`, 'Closes the pull request without merging. You can reopen it later.', 'Close pull request', true)) ghAct('Close pull request', 'prSetState', { number: num, open: false });
+                }, 'g-btn-close')
+                : btn('Reopen pull request', 'gh pr reopen', () => ghAct('Reopen pull request', 'prSetState', { number: num, open: true })),
+            ], (b) => ghAct('Comment', 'prComment', { number: num, body: b })))),
+        sidebar([
+          ['Reviewers', p.reviewers.map((r) => h('div', { className: 'g-side-row' }, avatar(r.login, 20), h('span', { className: 'g-grow' }, r.login),
+            r.state === 'APPROVED' ? icon('check', 'g-c-open') : r.state === 'CHANGES_REQUESTED' ? icon('x', 'g-c-closed') : r.state === 'PENDING' ? icon('dot', 'g-c-wait') : icon('eye', 'g-c-muted')))],
+          ['Labels', p.labels.length ? [h('div', { className: 'g-side-labels' }, ...p.labels.map(labelPill))] : []],
+          ['Development', [h('div', { className: 'g-side-row' }, icon('branch', 'g-c-muted'), branchPill(p.headRefName))]],
+        ]))];
+    }
+    return [...header, ...content];
+  }
+
+  function checksList(runs: CheckRun[]): HTMLElement {
+    if (!runs.length) return h('div', { className: 'g-box' }, h('div', { className: 'g-blank' }, icon('check', 'g-blank-icon'), h('h3', {}, 'No checks reported')));
+    return h('div', { className: 'g-box' }, ...runs.map((c) => h('div', { className: 'g-box-row' },
+      h('span', { className: 'g-row-icon' }, checkIcon(c.state)),
+      h('span', { className: 'g-grow' }, h('span', { className: 'g-row-title' }, c.workflow ? `${c.workflow} / ${c.name}` : c.name),
+        h('span', { className: 'g-row-meta' }, c.state === 'pass' ? `Successful${c.seconds !== null ? ` in ${c.seconds}s` : ''}`
+          : c.state === 'fail' ? `Failing${c.seconds !== null ? ` after ${c.seconds}s` : ''}` : c.state === 'pending' ? 'In progress' : 'Skipped or neutral')),
+      ...(c.url ? [btn('Details', c.url, () => call('openUrl', { url: c.url }), 'g-small')] : []))));
+  }
+
+  function mergeBox(p: PrDetail, failing: number, pending: number): HTMLElement {
+    const num = p.number;
+    if (p.state === 'MERGED') {
+      return h('div', { className: 'g-tl-item' }, h('div', { className: 'g-tl-avatar' }, h('span', { className: 'g-merge-badge g-bg-done' }, icon('prMerged'))),
+        h('div', { className: 'g-card g-merge g-merge-done' }, h('div', { className: 'g-merge-sec' }, h('strong', {}, 'Pull request successfully merged and closed'),
+          h('div', { className: 'g-muted' }, `${p.headRefName} was merged into ${p.baseRefName} ${ago(p.mergedAt)}.`))));
+    }
+    if (p.state === 'CLOSED') {
+      return h('div', { className: 'g-tl-item' }, h('div', { className: 'g-tl-avatar' }, h('span', { className: 'g-merge-badge g-bg-closed' }, icon('prClosed'))),
+        h('div', { className: 'g-card g-merge' }, h('div', { className: 'g-merge-sec' }, h('strong', {}, 'Closed with unmerged commits'),
+          h('div', { className: 'g-muted' }, 'This pull request is closed, but its branch still has commits. Reopen it below to merge.'))));
+    }
+    const total = p.checkRuns.length;
+    const checksRow = !total ? null : h('details', { className: 'g-merge-sec' },
+      h('summary', {}, checkIcon(failing ? 'fail' : pending ? 'pending' : 'pass'),
+        h('span', {}, h('strong', {}, failing ? 'Some checks were not successful' : pending ? 'Some checks haven’t completed yet' : 'All checks have passed'),
+          h('span', { className: 'g-muted' }, ` ${[failing && `${failing} failing`, pending && `${pending} in progress`, `${total - failing - pending} successful`].filter(Boolean).join(', ')} check${total === 1 ? '' : 's'}`)),
+        h('span', { className: 'dm-spacer' }), h('span', { className: 'g-link' }, 'Show all checks')),
+      checksList(p.checkRuns));
+    const review = p.reviewDecision === 'APPROVED' ? ['check', 'g-c-open', 'Changes approved', 'This pull request has an approving review.']
+      : p.reviewDecision === 'CHANGES_REQUESTED' ? ['x', 'g-c-closed', 'Changes requested', 'A reviewer asked for changes before merging.']
+      : p.reviewDecision === 'REVIEW_REQUIRED' ? ['dot', 'g-c-wait', 'Review required', 'At least one approving review is required by the repository.'] : null;
+    const conflict = p.mergeable === 'CONFLICTING';
+    const unknown = p.mergeable === 'UNKNOWN';
+
+    let method: 'merge' | 'squash' | 'rebase' = 'merge';
+    const LABEL = { merge: 'Merge pull request', squash: 'Squash and merge', rebase: 'Rebase and merge' } as const;
+    const action = h('div', { className: 'g-merge-sec g-merge-action' });
+    const drawButtons = () => {
+      if (p.isDraft) {
+        action.replaceChildren(h('div', { className: 'g-grow' }, h('strong', {}, 'This pull request is still a work in progress'),
+          h('div', { className: 'g-muted' }, 'Draft pull requests cannot be merged.')),
+        btn('Ready for review', 'gh pr ready', () => ghAct('Ready for review', 'prReady', { number: num })));
+        return;
+      }
+      const mainBtn = btn(LABEL[method], `gh pr merge --${method}`, () => confirmStep(), 'g-btn-green g-split-main');
+      const caret = h('button', { className: 'dm-btn g-btn-green g-split-caret', title: 'Choose a merge method',
+        onclick: (e: MouseEvent) => menu(e, (['merge', 'squash', 'rebase'] as const).map((m) => ({
+          label: `${m === method ? '✓ ' : ''}${LABEL[m] === 'Merge pull request' ? 'Create a merge commit' : LABEL[m]}`,
+          run: () => { method = m; drawButtons(); },
+        }))) }, icon('caret'));
+      mainBtn.disabled = conflict;
+      caret.disabled = conflict;
+      action.replaceChildren(h('span', { className: 'g-splitbtn' }, mainBtn, caret),
+        h('span', { className: 'g-muted' }, conflict ? 'Resolve the conflicts first.' : 'Merges on GitHub through gh.'));
+    };
+    const confirmStep = () => {
+      const del = h('input', { type: 'checkbox', checked: true });
+      action.replaceChildren(h('div', { className: 'g-grow' },
+        h('strong', {}, `${LABEL[method]} #${num}?`),
+        h('label', { className: 'g-check' }, del, `Delete the ${p.headRefName} branch after merging`)),
+      btn(`Confirm ${method === 'merge' ? 'merge' : method === 'squash' ? 'squash and merge' : 'rebase and merge'}`, 'Merge now',
+        () => ghAct('Merge pull request', 'prMerge', { number: num, method, deleteBranch: del.checked }), 'g-btn-green'),
+      btn('Cancel', 'Back', () => drawButtons()));
+    };
+    drawButtons();
+
+    return h('div', { className: 'g-tl-item' },
+      h('div', { className: 'g-tl-avatar' }, h('span', { className: `g-merge-badge ${conflict || failing ? 'g-bg-muted' : 'g-bg-open'}` }, icon('prMerged'))),
+      h('div', { className: 'g-card g-merge' },
+        ...(review ? [h('div', { className: 'g-merge-sec' }, icon(review[0], review[1]), h('span', {}, h('strong', {}, review[2]), h('div', { className: 'g-muted' }, review[3])))] : []),
+        ...(checksRow ? [checksRow] : []),
+        h('div', { className: 'g-merge-sec' }, conflict ? icon('x', 'g-c-closed') : unknown ? icon('dot', 'g-c-wait') : icon('check', 'g-c-open'),
+          h('span', {}, h('strong', {}, conflict ? 'This branch has conflicts that must be resolved' : unknown ? 'Checking for the ability to merge automatically…' : 'This branch has no conflicts with the base branch'),
+            h('div', { className: 'g-muted' }, conflict ? 'Use the command line or GitHub to resolve them.' : unknown ? 'Refresh in a moment.' : 'Merging can be performed automatically.'))),
+        action));
+  }
+
+  function filesTab(p: PrDetail): Node[] {
+    const box = h('div', {});
+    const reviewBtn = btn('Review changes', 'Comment, approve or request changes', (e) => {
+      const ta = h('textarea', { className: 'g-field', rows: 4, placeholder: 'Leave a comment' });
+      const radios = (['comment', 'approve', 'request-changes'] as const).map((v, i) => {
+        const r = h('input', { type: 'radio', name: 'g-review', value: v, checked: i === 0 });
+        const text = { comment: ['Comment', 'Submit general feedback without explicit approval.'], approve: ['Approve', 'Give your approval to merge these changes.'],
+          'request-changes': ['Request changes', 'Submit feedback that must be addressed before merging.'] }[v];
+        return h('label', { className: 'g-radio' }, r, h('span', {}, h('strong', {}, text[0]), h('div', { className: 'g-muted' }, text[1])));
+      });
+      const box2 = modal('Finish your review', [ta, ...radios], [btn('Cancel', 'Cancel', () => closeOverlays()),
+        btn('Submit review', 'gh pr review', () => {
+          const v = (box2.querySelector('input[name="g-review"]:checked') as HTMLInputElement).value as 'comment' | 'approve' | 'request-changes';
+          closeOverlays();
+          ghAct('Review', 'prReview', { number: p.number, action: v, body: ta.value });
+        }, 'g-btn-green')]);
+      e.stopPropagation();
+    }, 'g-btn-green');
+    (async () => {
+      message(box, 'Loading the diff…');
       try {
-        const d = await call('prDiff', { number: num });
+        const d = await call('prDiff', { number: p.number });
         if (d.kind === 'large') {
-          diffBox.replaceChildren(h('div', { className: 'g-diff-note' }, 'Diff too large — ', h('button', { className: 'g-link', onclick: () => call('openUrl', { url: `${p.url}/files` }) }, 'open it on GitHub')));
+          box.replaceChildren(h('div', { className: 'g-blank' }, h('h3', {}, 'This diff is too large to show here'),
+            btn('Open on GitHub', `${p.url}/files`, () => call('openUrl', { url: `${p.url}/files` }))));
           return;
         }
-        diffBox.replaceChildren(...d.files.map((f) => {
+        box.replaceChildren(...d.files.map((f) => {
           const name = /^diff --git a\/(.*) b\/(.*)$/.exec(f.header[0])?.[2] ?? f.header[0];
-          const box = h('div', { className: 'g-diff' });
-          renderDiff(box, { kind: f.binary ? 'binary' : 'diff', file: f } as DiffResult, () => call('openUrl', { url: `${p.url}/files` }), []);
-          return h('div', { className: 'g-file' }, h('div', { className: 'g-file-head g-mono' }, name), box);
+          const add = f.hunks.reduce((s, hk) => s + hk.lines.filter((l) => l[0] === '+').length, 0);
+          const del = f.hunks.reduce((s, hk) => s + hk.lines.filter((l) => l[0] === '-').length, 0);
+          const diff = h('div', { className: 'g-diff g-file-diff' });
+          renderDiff(diff, { kind: f.binary ? 'binary' : 'diff', file: f } as DiffResult, () => call('openUrl', { url: `${p.url}/files` }), []);
+          const toggle = h('button', { className: 'g-icon-btn', title: 'Collapse', onclick: () => { diff.hidden = !diff.hidden; toggle.classList.toggle('g-rot', diff.hidden); } }, icon('caret'));
+          return h('div', { className: 'g-box g-file-box' }, h('div', { className: 'g-box-head g-file-head2' }, toggle, diffstat(add, del), h('span', { className: 'g-mono g-grow' }, name)), diff);
         }));
       } catch (e) {
-        message(diffBox, (e as Error).message, true);
+        message(box, (e as Error).message, true);
       }
-    });
-    const review = (e: MouseEvent) => menu(e, ([['approve', 'Approve'], ['request-changes', 'Request changes'], ['comment', 'Comment']] as const).map(([action, label]) => ({
-      label, run: async () => {
-        const v = await form(`${label}: #${num}`, [{ key: 'body', label: action === 'approve' ? 'Comment (optional)' : 'Comment', kind: 'textarea' }], label);
-        if (v) ghAct('Review', 'prReview', { number: num, action, body: String(v.body) });
-      },
-    })));
-    const merge = (e: MouseEvent) => menu(e, (['merge', 'squash', 'rebase'] as const).map((method) => ({
-      label: { merge: 'Create a merge commit', squash: 'Squash and merge', rebase: 'Rebase and merge' }[method],
-      run: async () => {
-        const v = await form(`Merge #${num} (${method})?`, [{ key: 'del', label: `Delete the ${p.headRefName} branch afterwards`, kind: 'check', value: true }], 'Merge');
-        if (v) ghAct('Merge pull request', 'prMerge', { number: num, method, deleteBranch: !!v.del });
-      },
-    })));
-    const open_ = p.state === 'OPEN';
-    return [
-      h('div', { className: 'g-gh-bar' }, back('All pull requests'), h('span', { className: 'dm-spacer' }),
-        btn('Checkout', 'gh pr checkout', () => act('Checkout', 'prCheckout', { number: num })),
-        ...(open_ ? [
-          btn('Close', 'gh pr close', async () => {
-            if (await confirmBox(`Close #${num}?`, 'Closes the pull request without merging. It can be reopened on GitHub.', 'Close', true)) ghAct('Close pull request', 'prClose', { number: num });
-          }),
-          btn('Review ▾', 'Approve, request changes or comment', review), btn('Merge ▾', 'Merge this pull request', merge, 'g-primary')] : []),
-        btn('Open on GitHub', p.url, () => call('openUrl', { url: p.url }))),
-      h('h2', { className: 'g-gh-h' }, `#${p.number} ${p.title}`),
-      h('div', { className: 'dm-info' }, `${p.state.toLowerCase()}${p.isDraft ? ' draft' : ''} · ${p.author} ${p.state === 'MERGED' ? 'merged' : 'wants to merge'} ${p.headRefName} into ${p.baseRefName}`
-        + `${p.reviewDecision ? ` · ${p.reviewDecision.toLowerCase().replace(/_/g, ' ')}` : ''}${p.mergeable === 'CONFLICTING' ? ' · has conflicts' : ''}`),
-      mdBlock(p.bodyHtml),
-      h('h3', { className: 'g-section-head' }, h('span', {}, `Checks (${checks.length})`)),
-      ...(checks.length ? checks.map((c) => h('div', { className: 'g-file-head' },
-        h('span', { className: `g-check-state ${bucketClass(c.bucket)}` }, c.bucket || c.state.toLowerCase()),
-        h('span', { className: 'g-subject' }, `${c.workflow ? `${c.workflow} / ` : ''}${c.name}`),
-        ...(c.link ? [btn('Details', c.link, () => call('openUrl', { url: c.link }), 'g-small')] : [])))
-        : [h('div', { className: 'dm-info' }, 'No checks reported.')]),
-      h('h3', { className: 'g-section-head' }, h('span', {}, 'Files')), showDiff, diffBox,
-      h('h3', { className: 'g-section-head' }, h('span', {}, `Comments (${p.comments.length})`)),
-      ...commentList(p.comments),
-      commentBox('Comment', (b) => ghAct('Comment', 'prComment', { number: num, body: b })),
-    ];
+    })();
+    return [h('div', { className: 'g-subhead' }, h('span', { className: 'g-muted' }, `${p.changedFiles} file${p.changedFiles === 1 ? '' : 's'} changed`),
+      h('span', { className: 'dm-spacer' }), ...(p.state === 'OPEN' ? [reviewBtn] : [])), box];
   }
 
-  async function issueList(): Promise<Node[]> {
-    const st = h('select', { className: 'dm-btn', title: 'State',
-      onchange: () => { state.gh.issueState = st.value as UiState['gh']['issueState']; save(); load(); } },
-    ...(['open', 'closed', 'all'] as const).map((v) => h('option', { value: v, selected: state.gh.issueState === v }, v)));
-    const q = h('input', { className: 'dm-input g-q', type: 'search', placeholder: 'Filter (GitHub search syntax, Enter)', value: state.gh.issueSearch });
-    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { state.gh.issueSearch = q.value; save(); load(); } });
-    head.append(st, q, btn('New issue…', 'Create an issue', async () => {
-      const v = await form('New issue', [{ key: 'title', label: 'Title' }, { key: 'body', label: 'Description (Markdown)', kind: 'textarea' },
-        { key: 'labels', label: 'Labels (comma-separated)' }], 'Create');
-      if (!v) return;
-      try {
-        const url = await call('issueCreate', { title: String(v.title), body: String(v.body), labels: String(v.labels).split(',') });
-        open(Number(/\/issues\/(\d+)/.exec(url)?.[1]) || undefined);
-      } catch (e) {
-        showError(`Create issue failed: ${(e as Error).message}`);
-      }
-    }));
-    const issues = await call('issueList', { state: state.gh.issueState, search: state.gh.issueSearch });
-    if (!issues.length) return [h('div', { className: 'dm-message' }, 'No issues match.')];
-    return issues.map((i) => row(`#${i.number} ${i.title}`, `${i.state.toLowerCase()} · ${i.author} · ${iso(i.updatedAt)}`, () => open(i.number),
-      i.labels.map((l) => h('span', { className: 'g-ref' }, l.name))));
-  }
+  // ── Issue page ──
 
-  async function issueDetail(num: number): Promise<Node[]> {
+  async function issuePage(num: number): Promise<Node[]> {
     const i = await call('issueView', { number: num });
-    const isOpen = i.state === 'OPEN';
+    const open = i.state === 'OPEN';
     return [
-      h('div', { className: 'g-gh-bar' }, back('All issues'), h('span', { className: 'dm-spacer' }),
-        btn(isOpen ? 'Close issue' : 'Reopen issue', isOpen ? 'gh issue close' : 'gh issue reopen',
-          () => ghAct(isOpen ? 'Close issue' : 'Reopen issue', 'issueSetState', { number: num, open: !isOpen })),
-        btn('Open on GitHub', i.url, () => call('openUrl', { url: i.url }))),
-      h('h2', { className: 'g-gh-h' }, `#${i.number} ${i.title}`),
-      h('div', { className: 'dm-info' }, `${i.state.toLowerCase()} · opened by ${i.author}`, ...i.labels.map((l) => h('span', { className: 'g-ref' }, l.name))),
-      mdBlock(i.bodyHtml),
-      h('h3', { className: 'g-section-head' }, h('span', {}, `Comments (${i.comments.length})`)),
-      ...commentList(i.comments),
-      commentBox('Comment', (b) => ghAct('Comment', 'issueComment', { number: num, body: b })),
+      h('div', { className: 'g-back' }, h('button', { className: 'g-link', onclick: () => go({ open: undefined }) }, '← Issues')),
+      h('div', { className: 'g-title-row' },
+        h('h1', { className: 'g-title-big' }, i.title, ' ', h('span', { className: 'g-muted g-title-num' }, `#${i.number}`)),
+        h('div', { className: 'g-title-btns' }, btn('Open on GitHub', i.url, () => call('openUrl', { url: i.url })))),
+      h('div', { className: 'g-subtitle' }, statePill('issue', i.state),
+        h('span', {}, strong(i.author), ` opened this issue ${ago(i.createdAt)} · ${i.comments} comment${i.comments === 1 ? '' : 's'}`)),
+      h('div', { className: 'g-pr-layout g-issue-layout' },
+        h('div', { className: 'g-pr-main' }, h('div', { className: 'g-timeline' },
+          commentCard(i.author, i.createdAt, i.bodyHtml, 'Author'),
+          ...timelineView(i.timeline, i.author),
+          ...(open ? [] : [h('div', { className: 'g-tl-event' }, h('span', { className: 'g-tl-badge g-badge-done' }, icon('issueClosed')),
+            h('div', { className: 'g-grow' }, `This issue was closed ${ago(i.closedAt)}`))]),
+          composer('Leave a comment', () => [open
+            ? btn('Close issue', 'gh issue close', () => ghAct('Close issue', 'issueSetState', { number: num, open: false }), 'g-btn-close')
+            : btn('Reopen issue', 'gh issue reopen', () => ghAct('Reopen issue', 'issueSetState', { number: num, open: true }))],
+          (b) => ghAct('Comment', 'issueComment', { number: num, body: b })))),
+        sidebar([['Labels', i.labels.length ? [h('div', { className: 'g-side-labels' }, ...i.labels.map(labelPill))] : []]])),
     ];
   }
+
+  // ── Actions ──
 
   async function runList(): Promise<Node[]> {
-    head.append(h('span', { className: 'dm-info' }, `Workflow runs on ${overview?.status.branch ?? 'all branches'}`));
-    const runs = await call('runList', {});
-    if (!runs.length) return [h('div', { className: 'dm-message' }, 'No workflow runs for this branch.')];
-    return runs.map((r) => {
-      const failed = r.conclusion === 'failure';
-      const result = r.status === 'completed' ? r.conclusion || 'done' : r.status;
+    const runs = await call('runList', { all: state.gh.allRuns });
+    const scope = h('select', { className: 'dm-btn', title: 'Which runs', onchange: () => go({ allRuns: scope.value === 'all' }) },
+      h('option', { value: 'branch', selected: !state.gh.allRuns }, `Branch: ${overview?.status.branch ?? 'current'}`),
+      h('option', { value: 'all', selected: state.gh.allRuns }, 'All branches'));
+    return [
+      h('div', { className: 'g-subhead' }, h('h2', { className: 'g-h2' }, 'All workflows'), h('span', { className: 'dm-spacer' }), scope),
+      h('div', { className: 'g-box' },
+        h('div', { className: 'g-box-head' }, h('strong', {}, `${runs.length}${runs.length === 50 ? '+' : ''} workflow run${runs.length === 1 ? '' : 's'}`)),
+        ...(runs.length ? runs.map((r) => h('button', { className: 'g-box-row g-list-row', onclick: () => go({ run: r.databaseId, job: undefined }) },
+          h('span', { className: 'g-row-icon' }, runIcon(r.status, r.conclusion)),
+          h('span', { className: 'g-grow' }, h('span', { className: 'g-row-title' }, r.displayTitle),
+            h('span', { className: 'g-row-meta' }, h('strong', {}, r.workflowName), ` #${r.number}: ${r.event.replace(/_/g, ' ')}`)),
+          h('span', { className: 'g-row-side g-run-side' }, branchPill(r.headBranch),
+            h('span', { className: 'g-muted' }, icon('clock'), ` ${ago(r.createdAt)}`),
+            h('span', { className: 'g-muted' }, duration(r.createdAt, r.updatedAt)))))
+          : [h('div', { className: 'g-blank' }, icon('play', 'g-blank-icon'), h('h3', {}, 'No workflow runs'),
+            h('p', { className: 'g-muted' }, state.gh.allRuns ? 'This repository has no runs yet.' : 'Nothing has run on this branch. Pick All branches above.'))])),
+    ];
+  }
+
+  async function runPage(id: number): Promise<Node[]> {
+    const r = await call('runView', { id });
+    const failed = r.conclusion === 'failure';
+    const job = r.jobs.find((j) => j.databaseId === state.gh.job) ?? r.jobs.find((j) => j.conclusion === 'failure') ?? r.jobs[0];
+    const rerun = (e: MouseEvent) => menu(e, [
+      { label: 'Re-run failed jobs', disabled: !failed, run: () => ghAct('Re-run', 'runRerun', { id, failedOnly: true }) },
+      { label: 'Re-run all jobs', disabled: r.status !== 'completed', run: () => ghAct('Re-run', 'runRerun', { id, failedOnly: false }) },
+    ]);
+    const steps = !job ? [] : job.steps.map((s) => {
       const log = h('pre', { className: 'g-log', hidden: true });
-      return h('div', { className: 'g-file' },
-        h('div', { className: 'g-file-head' },
-          h('span', { className: `g-check-state ${r.conclusion === 'success' ? 'g-ok' : failed ? 'g-bad' : 'g-wait'}` }, result),
-          h('span', { className: 'g-subject' }, `${r.workflowName}: ${r.displayTitle}`),
-          h('span', { className: 'dm-info' }, `${r.event} · ${iso(r.createdAt)}`),
-          ...(failed ? [btn('Failed log', 'gh run view --log-failed (last 2,000 lines)', async () => {
-            log.hidden = !log.hidden;
-            if (log.hidden) { log.textContent = ''; return; }
-            log.textContent = 'Loading…';
-            try { log.textContent = (await call('runLog', { id: r.databaseId })) || 'No failed-step log.'; } catch (e) { log.textContent = (e as Error).message; }
-          }, 'g-small'), btn('Rerun failed', 'gh run rerun --failed', () => ghAct('Rerun', 'runRerun', { id: r.databaseId, failedOnly: true }), 'g-small')] : []),
-          ...(r.status === 'completed' && !failed ? [btn('Rerun', 'gh run rerun', () => ghAct('Rerun', 'runRerun', { id: r.databaseId, failedOnly: false }), 'g-small')] : []),
-          btn('Open', r.url, () => call('openUrl', { url: r.url }), 'g-small')),
-        log);
+      const head = h('button', { className: 'g-step', onclick: async () => {
+        log.hidden = !log.hidden;
+        head.classList.toggle('g-open', !log.hidden);
+        if (log.hidden) { log.replaceChildren(); return; }
+        log.textContent = 'Loading…';
+        try {
+          const text = await call('jobLog', { jobId: job.databaseId, step: s.name });
+          log.replaceChildren(...(text ? text.split('\n') : ['No log output for this step.']).map((line, k) =>
+            h('div', { className: `g-log-line${/^##\[error\]/.test(line) ? ' g-log-error' : /^##\[warning\]/.test(line) ? ' g-log-warn' : ''}` },
+              h('span', { className: 'g-log-n' }, String(k + 1)), line.replace(/^##\[(error|warning|notice|debug)\]/, ''))));
+        } catch (e) {
+          log.textContent = (e as Error).message;
+        }
+      } }, icon('chevron', 'g-step-chev'), runIcon(s.status, s.conclusion), h('span', { className: 'g-grow' }, s.name),
+      h('span', { className: 'g-muted' }, duration(s.startedAt, s.completedAt)));
+      return h('div', {}, head, log);
     });
+    return [
+      h('div', { className: 'g-back' }, h('button', { className: 'g-link', onclick: () => go({ run: undefined, job: undefined }) }, '← All workflows')),
+      h('div', { className: 'g-title-row' },
+        h('h1', { className: 'g-title-big' }, runIcon(r.status, r.conclusion), ' ', r.displayTitle, ' ', h('span', { className: 'g-muted g-title-num' }, `${r.workflowName} #${r.number}`)),
+        h('div', { className: 'g-title-btns' }, btn('Re-run jobs', 'gh run rerun', rerun), btn('Open on GitHub', r.url, () => call('openUrl', { url: r.url })))),
+      h('div', { className: 'g-box g-run-summary' },
+        h('div', {}, h('div', { className: 'g-muted' }, `Triggered via ${r.event.replace(/_/g, ' ')} ${ago(r.createdAt)}`), branchPill(r.headBranch), ' ', h('span', { className: 'g-mono g-muted' }, r.headSha.slice(0, 7))),
+        h('div', {}, h('div', { className: 'g-muted' }, 'Status'), h('strong', {}, r.status === 'completed' ? (r.conclusion || 'completed').replace(/_/g, ' ') : r.status.replace(/_/g, ' '))),
+        h('div', {}, h('div', { className: 'g-muted' }, 'Total duration'), h('strong', {}, duration(r.createdAt, r.updatedAt) || '—'))),
+      h('div', { className: 'g-run-layout' },
+        h('nav', { className: 'g-jobs' }, h('div', { className: 'g-side-title' }, 'Jobs'),
+          ...r.jobs.map((j) => {
+            const b = h('button', { className: 'g-job', onclick: () => go({ job: j.databaseId }) }, runIcon(j.status, j.conclusion), h('span', { className: 'g-grow' }, j.name),
+              h('span', { className: 'g-muted' }, duration(j.startedAt, j.completedAt)));
+            b.setAttribute('aria-selected', String(j === job));
+            return b;
+          })),
+        h('div', { className: 'g-box g-job-box' },
+          h('div', { className: 'g-box-head' }, ...(job ? [h('strong', {}, job.name), h('span', { className: 'g-muted' }, ` ${job.conclusion ? `${job.conclusion} ` : ''}${ago(job.completedAt || job.startedAt)}`)] : ['No jobs'])),
+          ...steps)),
+    ];
+  }
+
+  // ── Commits ──
+
+  async function commitsPage(): Promise<Node[]> {
+    const { branch, commits } = await call('ghCommits', {});
+    return [
+      h('div', { className: 'g-subhead' }, h('h2', { className: 'g-h2' }, 'Commits'), branchPill(branch),
+        h('span', { className: 'g-muted' }, branch === overview?.status.branch ? '' : '(your branch isn’t on GitHub yet; showing the default branch)')),
+      commits.length ? commitHistory(commits, true) : h('div', { className: 'g-blank' }, h('h3', {}, 'No commits')),
+    ];
   }
 
   return { refresh: load };
 }
+
+/** The signed-in gh user, for the comment composer's avatar */
+let me: string | null = null;
 
 // ── Start ─────────────────────────────────────────────────────────────
 

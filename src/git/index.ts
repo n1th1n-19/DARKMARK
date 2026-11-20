@@ -72,7 +72,8 @@ class GitPanel {
     this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'logo.png');
     this.panel.webview.html = shell(this.panel.webview, context, {
       title: 'darkmark Git',
-      csp: viewerCsp(),
+      // GitHub avatars are the one remote image source (everything else stays blocked)
+      csp: (src, nonce) => viewerCsp()(src, nonce).replace('img-src ', 'img-src https://avatars.githubusercontent.com '),
       styles: [['media', 'viewer.css'], ['out', 'webview', 'git.css']],
       scripts: [['out', 'webview', 'git.js']],
       body: '<div id="app"></div>',

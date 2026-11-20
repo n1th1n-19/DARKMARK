@@ -1,3 +1,20 @@
+# 2026-11-20 — v3.4.0: GitHub-style GitHub tab
+
+## Changes
+
+- `src/webview/git.ts`, `git.css` — the GitHub tab redrawn like github.com: repo tabs with counts, boxed Open/Closed lists, PR page (state pill, Conversation/Commits/Checks/Files changed, timeline, sidebar, merge box with split button and confirm, close/reopen next to comment, review dialog), issue page, Actions runs and run page (jobs, steps, per-step log), commits grouped by day; own inline SVG icons; GitHub alerts
+- `src/github/handlers.ts` — richer data: labels with colors, comment counts, check rollups, reviews, commits, reviewers, Open/Closed totals (search API), run jobs and steps, per-step job log (color codes and group markers stripped), commits from GitHub; Markdown rendered with raw HTML for the webview sanitizer; task-list checkboxes
+- `src/git/protocol.ts` — the new GitHub types and requests (`counts`, `prSetState`, `prReady`, `runView`, `jobLog`, `ghCommits`)
+- `src/git/index.ts` — panel CSP allows images from `avatars.githubusercontent.com` only
+- `README.md`, `RELEASE_NOTES.md`
+
+## New Files
+
+- `src/github/rollup.ts` — status-check rollup to per-check state and a one-icon summary; `test/rollup.test.mjs`
+- `src/webview/lib/sanitize.ts` — rebuilds GitHub HTML from an allowlist of tags and attributes; only avatar images load, other images become links
+
+---
+
 # 2026-11-20 — v3.3.0: GitHub tab through gh
 
 ## Changes
