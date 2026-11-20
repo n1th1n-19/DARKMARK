@@ -188,6 +188,14 @@ class GitPanel {
     return api?.toGitUri ? api.toGitUri(uri, ref) : uri;
   }
 
+  /** stash@{n} of the stash with this commit hash right now: positions shift when stashes are added */
+  private async stashRef(hash: string): Promise<string> {
+    const list = (await this.run(['stash', 'list', '--format=%gd%x00%H'])).split('\n');
+    const ref = list.map((l) => l.split('\0')).find(([, h]) => h === hash)?.[0];
+    if (!ref) throw new GitError('That stash no longer exists. Refresh and try again.');
+    return ref;
+  }
+
   private async defaultRemote(): Promise<string> {
     const remotes = (await this.run(['remote'])).split('\n').filter(Boolean);
     if (!remotes.length) throw new GitError('This repository has no remote.');
@@ -214,7 +222,7 @@ class GitPanel {
         this.run(['status', '--porcelain=v2', '--branch', '-z']),
         this.run(['for-each-ref', '--format=%(refname)%00%(objectname)%00%(*objectname)%00%(HEAD)%00%(upstream:short)',
           'refs/heads', 'refs/remotes', 'refs/tags']),
-        this.run(['stash', 'list', '--format=%gd%x00%s']),
+        this.run(['stash', 'list', '--format=%gd%x00%H%x00%s']),
         this.op(),
       ]);
       const refs: Ref[] = [];
@@ -226,8 +234,8 @@ class GitPanel {
         refs.push({ name, kind, hash: peeled || obj, current: head === '*', upstream: upstream ?? '' });
       }
       const stashes = stashText.split('\n').filter(Boolean).map((l) => {
-        const [ref, subject] = l.split('\0');
-        return { index: Number(/\{(\d+)\}/.exec(ref)?.[1] ?? 0), subject: subject ?? ref };
+        const [ref, hash, subject] = l.split('\0');
+        return { index: Number(/\{(\d+)\}/.exec(ref)?.[1] ?? 0), hash, subject: subject ?? ref };
       });
       return { root: this.git.root, status: parseStatus(statusText), op, refs, stashes } satisfies Overview;
     },
@@ -252,8 +260,16 @@ class GitPanel {
       const commits = all.slice(0, PAGE);
       let rows = null;
       if (graph) {
-        // Pages are fetched in order the first time; a page refetched later reuses its saved lanes
-        const lanes = [...(this.lanes.get(skip) ?? [])];
+        // A page refetched later reuses its saved lanes; after a refresh cleared them, a deep page
+        // rebuilds them from the hashes and parents of every commit above it (cheap: rev-list only)
+        let saved = this.lanes.get(skip);
+        if (!saved && skip > 0) {
+          const above = (await this.run(['rev-list', '--date-order', '--exclude=refs/stash', '--all', '--parents', `--max-count=${skip}`]))
+            .split('\n').filter(Boolean).map((l) => { const [hash, ...parents] = l.split(' '); return { hash, parents }; });
+          saved = [];
+          layout(above, saved);
+        }
+        const lanes = [...(saved ?? [])];
         rows = layout(commits, lanes);
         this.lanes.set(skip + commits.length, [...lanes]);
       }
@@ -327,11 +343,13 @@ class GitPanel {
       if (untracked.length) await this.run(['clean', '-f', '-d', '-q', '--', ...untracked]);
     },
 
-    stageLines: async ({ path: file, staged, discard, hunk, lines }) => {
+    stageLines: async ({ path: file, staged, discard, hunk, lines, texts }) => {
       const [f] = parseDiff(await this.run(['diff', ...(staged ? ['--cached'] : []), '--', file]));
       const h = f?.hunks.find((x) => x.header === hunk);
-      if (!f || !h) throw new GitError('The file changed since it was shown. Refresh and try again.');
-      const pick = lines.length ? new Set(lines) : allChanges(h);
+      // The header alone can match a hunk whose lines changed: the selected lines must still be what was shown
+      const same = h && lines.length > 0 && lines.length === texts.length && lines.every((i, k) => h.lines[i] === texts[k]);
+      if (!f || !h || !same) throw new GitError('The file changed since it was shown. Refresh and try again.');
+      const pick = new Set(lines);
       // Unstage and discard apply in reverse: to the index, or to the working tree
       const patch = partialPatch(f, h, pick, staged || !!discard);
       if (!patch) return;
@@ -410,8 +428,8 @@ class GitPanel {
     stashSave: async ({ message, untracked }) => {
       await this.run(['stash', 'push', ...(untracked ? ['-u'] : []), ...(message.trim() ? ['-m', message] : [])]);
     },
-    stashApply: async ({ index, pop }) => { await this.run(['stash', pop ? 'pop' : 'apply', `stash@{${Math.floor(index)}}`]); },
-    stashDrop: async ({ index }) => { await this.run(['stash', 'drop', `stash@{${Math.floor(index)}}`]); },
+    stashApply: async ({ hash, pop }) => { await this.run(['stash', pop ? 'pop' : 'apply', await this.stashRef(hash)]); },
+    stashDrop: async ({ hash }) => { await this.run(['stash', 'drop', await this.stashRef(hash)]); },
 
     fetch: async () => { await this.run(['fetch', '--all', '--prune'], { network: true }); },
     pull: async () => { await this.run(['pull', '--no-edit'], { network: true }); },

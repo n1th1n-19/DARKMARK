@@ -125,3 +125,30 @@ test('detached HEAD and an empty repository', () => {
   assert.equal(s.oid, null);
   assert.equal(s.branch, null);
 });
+
+test('a hunk staged on its own lands at its own place, even with duplicate context further down', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dm-diff-'));
+  try {
+    git(dir, 'init', '-q');
+    git(dir, 'config', 'user.email', 't@t');
+    git(dir, 'config', 'user.name', 't');
+    const block = Array.from({ length: 10 }, (_, i) => `dup ${i}`);
+    const base = [...Array.from({ length: 94 }, (_, i) => `line ${i}`), ...block, ...block, 'end'];
+    writeFileSync(join(dir, 'f'), base.join('\n') + '\n');
+    git(dir, 'add', '.');
+    git(dir, 'commit', '-qm', 'base');
+    // Worktree: 10 lines inserted at the top, and "dup 5" changed in the FIRST block only
+    const work = [...Array.from({ length: 10 }, (_, i) => `new ${i}`), ...base];
+    work[10 + 94 + 5] = 'DUP 5 changed';
+    writeFileSync(join(dir, 'f'), work.join('\n') + '\n');
+    const [f] = parseDiff(git(dir, 'diff'));
+    const h = f.hunks.find((x) => x.lines.includes('+DUP 5 changed'));
+    apply(dir, partialPatch(f, h, allChanges(h)), '--cached');
+    const index = git(dir, 'show', ':f').split('\n');
+    assert.equal(index[94 + 5], 'DUP 5 changed', 'change belongs in the first block');
+    assert.equal(index[104 + 5], 'dup 5', 'second block untouched');
+    assert.equal(index.length, base.length + 1, 'the top insertion was not staged');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -195,7 +195,11 @@ function form(title: string, fields: Field[], ok: string): Promise<Record<string
     const box = modal(title, rows, [btn('Cancel', 'Cancel', () => done(null)), btn(ok, ok, submit, 'g-primary')]);
     const back = box.parentElement as HTMLElement;
     box.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (!(e.target instanceof HTMLTextAreaElement) || e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
+      // Enter submits from a text field only (Ctrl+Enter in a textarea); on a button it presses that button
+      const t = e.target;
+      const text = t instanceof HTMLInputElement && t.type === 'text';
+      const area = t instanceof HTMLTextAreaElement && (e.ctrlKey || e.metaKey);
+      if (e.key === 'Enter' && (text || area)) { e.preventDefault(); submit(); }
     });
     (box.querySelector('.g-field') as HTMLElement | null)?.focus();
   });
@@ -376,6 +380,8 @@ function logView(file?: string) {
   let offset = 0;
   let more = false;
   let loading = false;
+  let reloading = false; // a new query or refresh is replacing the window: no paging from the old one
+  let failedAt = 0; // last failed page request: no automatic retry for a moment
   let gen = 0;
   let laneW = 0;
 
@@ -392,23 +398,30 @@ function logView(file?: string) {
 
   async function reload(keepScroll = false) {
     const g = ++gen;
+    reloading = true;
+    failedAt = 0;
     const top = keepScroll ? list.scrollTop : 0;
-    // Refetch from the first page so the graph lanes are laid out from the top again
-    const want = keepScroll ? Math.min(MAX_COMMITS, Math.ceil((top + list.clientHeight) / ROW_H / PAGE) * PAGE) : PAGE;
+    // Reload the pages around what is on screen (one page above, one below), not from commit 0,
+    // so a refresh deep in the history keeps the same commits in view. The host rebuilds the lanes.
+    const topRow = Math.floor(top / ROW_H);
+    const start = keepScroll ? Math.max(0, (Math.floor(topRow / PAGE) - 1) * PAGE) : 0;
+    const end = keepScroll ? (Math.ceil((top + list.clientHeight) / ROW_H / PAGE) + 1) * PAGE : PAGE;
     let got: Commit[] = [], gotRows: GraphRow[] = [], m = false, isGraph = true;
     try {
       do {
-        const r = await fetchPage(got.length);
+        const r = await fetchPage(start + got.length);
         if (g !== gen) return;
         got = got.concat(r.commits);
         if (r.rows) gotRows = gotRows.concat(r.rows); else isGraph = false;
         m = r.more;
-      } while (m && got.length < want);
+      } while (m && start + got.length < end);
     } catch (e) {
-      if (g === gen) message(rowsBox, (e as Error).message, true);
+      if (g === gen) { reloading = false; message(rowsBox, (e as Error).message, true); }
       return;
     }
-    commits = got; rows = isGraph ? gotRows : null; offset = 0; more = m;
+    if (!got.length && start > 0) return reload(false); // the log got shorter than the old position
+    reloading = false;
+    commits = got; rows = isGraph ? gotRows : null; offset = start; more = m;
     measure();
     if (!file) loadPrHeads(render);
     if (!commits.length) message(rowsBox, file ? 'No history for this file.' : state.search.q ? 'No commits match.' : 'No commits yet.');
@@ -419,7 +432,7 @@ function logView(file?: string) {
   }
 
   async function loadMore(dir: 1 | -1) {
-    if (loading) return;
+    if (loading || reloading) return;
     loading = true;
     const g = gen;
     try {
@@ -448,6 +461,7 @@ function logView(file?: string) {
       }
       measure();
     } catch (e) {
+      failedAt = Date.now();
       showError((e as Error).message);
     } finally {
       loading = false;
@@ -482,7 +496,9 @@ function logView(file?: string) {
       els.push(el);
     }
     rowsBox.replaceChildren(...els);
-    // Near either end of the loaded window: fetch the neighbouring page
+    // Near either end of the loaded window: fetch the neighbouring page (not right after a failure:
+    // the next scroll after a pause retries, instead of an endless request loop)
+    if (Date.now() - failedAt < 3000) return;
     if (last >= total - 50 && more) loadMore(1);
     else if (first <= offset + 50 && offset > 0) loadMore(-1);
   }
@@ -684,16 +700,20 @@ function fileRow(name: string, stat: string, loadDiff: () => Promise<DiffResult>
   toggle.setAttribute('aria-expanded', 'false'); // an attribute, not a DOM property: h() can't set it
   const row = h('div', { className: `g-file ${cls}`.trim() },
     h('div', { className: 'g-file-head' }, toggle, h('span', { className: 'g-stat' }, stat), ...buttons), diffBox);
+  // Each expansion gets an id: a response for an earlier expansion (or after collapsing) is dropped
+  let expansion = 0;
   toggle.onclick = async () => {
     const open = diffBox.hidden;
+    const id = ++expansion;
     diffBox.hidden = !open;
     toggle.setAttribute('aria-expanded', String(open));
     if (!open) { diffBox.replaceChildren(); return; } // free the diff's DOM when collapsed
     message(diffBox, 'Loading…');
     try {
-      renderDiff(diffBox, await loadDiff(), openDiff, hunkActions);
+      const r = await loadDiff();
+      if (id === expansion) renderDiff(diffBox, r, openDiff, hunkActions);
     } catch (e) {
-      message(diffBox, (e as Error).message, true);
+      if (id === expansion) message(diffBox, (e as Error).message, true);
     }
   };
   return row;
@@ -727,8 +747,19 @@ function renderDiff(box: HTMLElement, r: DiffResult, openDiff: () => void, actio
         h('span', { className: 'g-ln' }, o), h('span', { className: 'g-ln' }, n), h('span', { className: 'g-code' }, l));
       if (actions.length && (t === '+' || t === '-')) {
         el.classList.add('g-pickable');
-        el.title = 'Click to select this line';
-        el.onclick = () => { sel.has(i) ? sel.delete(i) : sel.add(i); el.classList.toggle('g-picked'); label(); };
+        el.title = 'Click, or Space, to select this line';
+        // A checkbox to assistive tech and the keyboard, as well as to the pointer
+        el.tabIndex = 0;
+        el.setAttribute('role', 'checkbox');
+        el.setAttribute('aria-checked', 'false');
+        const flip = () => {
+          sel.has(i) ? sel.delete(i) : sel.add(i);
+          el.classList.toggle('g-picked', sel.has(i));
+          el.setAttribute('aria-checked', String(sel.has(i)));
+          label();
+        };
+        el.onclick = flip;
+        el.onkeydown = (e: KeyboardEvent) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } };
       }
       return el;
     });
@@ -772,7 +803,8 @@ function changesView() {
   const letter = (f: FileStatus, staged: boolean) => (f.untracked ? 'U' : f.conflict ? '!' : staged ? f.x : f.y);
 
   function render() {
-    const files = overview?.status.files ?? [];
+    if (!overview) { message(lists, 'Loading…'); return; } // never call a tree clean before git said so
+    const files = overview.status.files;
     const conflicts = files.filter((f) => f.conflict);
     const staged = files.filter((f) => !f.conflict && !f.untracked && f.x !== '.');
     const unstaged = files.filter((f) => !f.conflict && (f.untracked || f.y !== '.'));
@@ -784,8 +816,12 @@ function changesView() {
         'Your unstaged changes are lost, and untracked files are deleted. This can’t be undone.', 'Discard', true)) return;
       act('Discard', 'discard', { paths: fs.filter((f) => !f.untracked).map((f) => f.path), untracked: fs.filter((f) => f.untracked).map((f) => f.path) });
     };
-    const lineAct = (f: FileStatus, staged: boolean, discardIt = false) => (hunk: Hunk, lines: number[]) =>
-      act(discardIt ? 'Discard' : staged ? 'Unstage' : 'Stage', 'stageLines', { path: f.path, staged, discard: discardIt, hunk: hunk.header, lines });
+    // Exact lines and their text go to the host, which refuses if the fresh diff differs
+    const lineAct = (f: FileStatus, staged: boolean, discardIt = false) => (hunk: Hunk, picked: number[]) => {
+      const lines = picked.length ? picked : hunk.lines.flatMap((l, i) => (l[0] === '+' || l[0] === '-' ? [i] : []));
+      return act(discardIt ? 'Discard' : staged ? 'Unstage' : 'Stage', 'stageLines',
+        { path: f.path, staged, discard: discardIt, hunk: hunk.header, lines, texts: lines.map((i) => hunk.lines[i]) });
+    };
 
     lists.replaceChildren(
       section('Merge conflicts', conflicts, [], (f) => fileRow(f.path, '!', () => call('workDiff', { path: f.path, staged: false, untracked: false }),
@@ -821,10 +857,10 @@ function changesView() {
           }, 'g-small')),
         ...stashes.map((s) => h('div', { className: 'g-file-head g-stash' },
           h('span', { className: 'g-mono' }, `stash@{${s.index}}`), h('span', { className: 'g-subject' }, s.subject),
-          btn('Apply', 'Apply and keep the stash', () => act('Apply stash', 'stashApply', { index: s.index, pop: false }), 'g-small'),
-          btn('Pop', 'Apply and drop the stash', () => act('Pop stash', 'stashApply', { index: s.index, pop: true }), 'g-small'),
+          btn('Apply', 'Apply and keep the stash', () => act('Apply stash', 'stashApply', { hash: s.hash, pop: false }), 'g-small'),
+          btn('Pop', 'Apply and drop the stash', () => act('Pop stash', 'stashApply', { hash: s.hash, pop: true }), 'g-small'),
           btn('Drop', 'Delete the stash', async () => {
-            if (await confirmBox(`Drop stash@{${s.index}}?`, 'The stashed changes are deleted.', 'Drop', true)) act('Drop stash', 'stashDrop', { index: s.index });
+            if (await confirmBox(`Drop stash@{${s.index}}?`, 'The stashed changes are deleted.', 'Drop', true)) act('Drop stash', 'stashDrop', { hash: s.hash });
           }, 'g-small g-danger')))),
     );
   }
@@ -1526,5 +1562,5 @@ let me: string | null = null;
 
 // ── Start ─────────────────────────────────────────────────────────────
 
-loadOverview().catch((e) => showError((e as Error).message));
-setView(state.view);
+// The first view renders after the first overview, so Changes never shows a dirty tree as clean
+loadOverview().catch((e) => showError((e as Error).message)).finally(() => setView(state.view));

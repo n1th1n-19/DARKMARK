@@ -121,3 +121,30 @@ test('large output stops at maxBytes', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('paths are literal: discarding "[id].tsx" leaves "i.tsx" alone', async () => {
+  const { dir, git } = await repo([['[id].tsx', 'a\n', 'one'], ['i.tsx', 'b\n', 'two']]);
+  try {
+    writeFileSync(join(dir, '[id].tsx'), 'A\n');
+    writeFileSync(join(dir, 'i.tsx'), 'B\n');
+    await git.run(['restore', '--worktree', '--', '[id].tsx']);
+    assert.equal(sh(dir, 'status', '--porcelain'), 'M i.tsx');
+    // A literal "*.tsx" names no file, so nothing gets staged
+    await assert.rejects(git.run(['add', '-A', '--', '*.tsx']), /did not match any files/);
+    assert.equal(sh(dir, 'diff', '--cached', '--name-only'), '');
+  } finally {
+    git.dispose();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('stdin is not written to a git that already exited (no uncaught EPIPE)', async () => {
+  const { dir, git } = await repo([['a', '1', 'one']]);
+  try {
+    // `git version` never reads stdin; a large input must not crash the process
+    await git.run(['version'], { input: 'x'.repeat(4 * 1024 * 1024) });
+  } finally {
+    git.dispose();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

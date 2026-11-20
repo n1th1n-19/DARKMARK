@@ -1,5 +1,20 @@
 # Release Notes
 
+## v3.4.1
+
+### Fixes in the Git panel
+
+- **Paths are taken literally.** Discarding or staging a file with `[`, `]`, `*` or `?` in its name (`pages/[id].tsx`) no longer touches other files that the name matches as a pattern (`pages/i.tsx`).
+- **Staging a single hunk** puts the change at its own place, even when the same lines appear again further down the file.
+- **Line staging and discard** are refused if the lines changed since the diff was shown, instead of acting on the new text.
+- **Stash apply, pop and drop** act on the stash you clicked, even if another stash was created meanwhile.
+- **Enter on Cancel** in a dialog cancels (it used to confirm, so Delete branch could go ahead).
+- **Refresh deep in the history** keeps the same commits in view.
+- A failed page load no longer retries in a loop; a new search can't mix with pages of the old one; a late diff no longer replaces a newer one; Changes shows *Loading* instead of "clean" before git has answered; a large commit message can't crash the panel when git exits early.
+- Changed lines in a diff can be selected with the keyboard (Tab, then Space).
+
+---
+
 ## v3.4.0
 
 ### The GitHub tab now looks like GitHub
