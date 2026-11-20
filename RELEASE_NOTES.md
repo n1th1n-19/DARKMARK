@@ -1,5 +1,19 @@
 # Release Notes
 
+## v3.1.0
+
+### New
+
+- **Slides viewer.** `.pptx` files open in darkmark: a thumbnail list on the left, the current slide in the middle and the speaker notes underneath (toggle with **Notes**). Text, bullets, shapes, images, tables, groups and slide backgrounds are shown, using the deck's theme colors and fonts. Move with the arrow keys, Page Up/Down, Home and End. darkmark remembers the slide you were on and whether notes were open.
+- Links in slides open in your browser. Nothing in a deck is loaded from the internet.
+
+### Limits
+
+- The rendering is approximate. Charts, SmartArt, video and embedded objects appear as a labelled placeholder box, and animations are not played.
+- To keep the default editor for `.pptx`, set `"workbench.editorAssociations": { "*.pptx": "default" }`.
+
+---
+
 ## v3.0.0
 
 ### New: file viewers
